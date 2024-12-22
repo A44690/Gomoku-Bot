@@ -1,3 +1,5 @@
+# Logic version 0.0.1: 2024/12/21
+# I don't think this can be optimized further, this is the most basic version of the game logic
 import numpy as np
 class game:
     def __init__(self, dimentions = 15, lim = 2**63 - 1):
@@ -44,19 +46,9 @@ class game:
         for i in range(2):
             new_x = x + self.check_dir[dir][i][0]
             new_y = y + self.check_dir[dir][i][1]
-            print(new_x, " ", new_y, self.dimention, last_x, last_y)
+            # print(new_x, " ", new_y, self.dimention, last_x, last_y)
             if ((0 <= new_x < self.dimention) and (0 <= new_y < self.dimention)) and not (new_x == last_x and new_y == last_y):
-                print("  ", new_x, " ", new_y)
+                # print("  ", new_x, " ", new_y)
                 if self.board[new_x][new_y] == self.color:
                     if self.check(new_x, new_y, x, y, dir):
                         return True
-
-test = game(lim= 0)
-state = 0
-while not (state == -2):
-    x = int(input())
-    y = int(input())
-    state = test.play(x, y)
-    print(state)
-    print(test.board)
-exit(0)
