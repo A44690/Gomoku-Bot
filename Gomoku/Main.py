@@ -1,4 +1,5 @@
 # User inference version 0.0.1: 2024/12/21
+# User inference version 0.0.2: 2024/12/
 # No GUI, just a simple game that can be played with terminal
 import numpy as np
 import Logics as lg
