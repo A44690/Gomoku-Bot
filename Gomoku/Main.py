@@ -25,17 +25,26 @@ for y in range(20, 760, 40):
 pygame.display.flip()
 
 state = 0
-while not (state == -2):
+done = False
+while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             state = -2
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
+                if done:
+                    pygame.quit()
+                    quit()
                 mouse_pos = np.array(pygame.mouse.get_pos())
                 game_pos = np.flip(mouse_pos // 40)
                 state = test.play(game_pos[0],game_pos[1])
-                if state != -1:
+                if state == 0:
                     color = BLACK if test.color == 1 else WHITE 
                     pygame.draw.circle(screen,color,np.flip(game_pos)*40+20,15)
                     pygame.display.flip()
+                elif state == -2:
+                    color = BLACK if test.color != 1 else WHITE 
+                    pygame.draw.circle(screen,color,np.flip(game_pos)*40+20,15)
+                    pygame.display.flip()
+                    done = True
 exit(0)
