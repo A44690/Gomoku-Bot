@@ -8,10 +8,10 @@ policy_kwargs = dict(features_extractor_class=CustomCnnPolicy, features_extracto
 env = GomokuEnv()
 if (input("pretrain? (y/n)") == "y"):
     model_name = input("model name: ")
-    model = PPO.load("ppo_models/" + model_name, env=env, verbose=1, n_steps=128, learning_rate=0.0001, device="cuda", tensorboard_log="./tensorboard/")
+    model = PPO.load("ppo_models/" + model_name, env=env, verbose=1, n_steps=128, learning_rate=0.0001, tensorboard_log="./tensorboard/")
     print("model loaded")
 else:
-    model = PPO("CnnPolicy", env, verbose=1, n_steps=128, learning_rate=0.0001, policy_kwargs=policy_kwargs, device="cuda", tensorboard_log="./tensorboard/")
+    model = PPO("CnnPolicy", env, verbose=1, n_steps=128, learning_rate=0.0001, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model created")
 
 while True:
