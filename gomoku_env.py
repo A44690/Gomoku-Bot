@@ -16,19 +16,19 @@ render = False
 endgame_if_illegal = False
 enable_illegal_move_notification = False
 enable_illegal_move_penalty = False
+wait_time = 1  # time to wait after each move(s)
 
 class GomokuEnv(Env):
     def __init__(self):
         self.action_space = Discrete(19*19)
-        self.observation_space = Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)#10 layers: 2 for player and opponent, 4 for last 8 moves of player, 4 for last 8 moves of opponent
+        self.observation_space = Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)# 10 layers: 2 for player and opponent, 4 for last 8 moves of player, 4 for last 8 moves of opponent
         self.board = Board()
         self.total_reward = 0.0
-        self.wait_time = 0.2  # time to wait after each move(s)
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 8 moves of both players, initialized to invalid positions
         
         if render:
-            #display
+            # display
             pygame.init()
             # Set the width and height of the screen [width, height]
             self.size = (760, 760)
@@ -68,7 +68,7 @@ class GomokuEnv(Env):
                 pass
             highlight(self.screen, (x, y))
             pygame.display.flip()
-            time.sleep(self.wait_time)
+            time.sleep(wait_time)
         
         # record the move of current player
         np.append(self.last_eight_moves[0 if self.board.player == 1 else 1], [x, y])
@@ -77,22 +77,30 @@ class GomokuEnv(Env):
         self.board.play((x, y))
         
         terminated = self.board.finished or self.n_step >= 19*19
+        
+        win_reward = 0
         if self.board.finished:# game over
-            sys.stdout.write("Game over, the winner is: " + ("2 (White)" if self.board.player == -1 else "1 (Black)" + "\n"))
+            win_reward = 1000
+            sys.stdout.write("Game over, the winner is: " + ("2 (White)" if self.board.player == 1 else "1 (Black)" + "\n"))
+            sys.stdout.flush()
+        elif self.n_step >= 19*19:
+            sys.stdout.write("Game over, draw" + "\n")
             sys.stdout.flush()
 
-        self.total_reward += self.reward
+        self.total_reward += self.reward + win_reward
         self.n_step += 1
         info = {"invalid_move": False, "total_reward": self.total_reward, "reward": self.reward, "n_step": self.n_step}
         
-        return self.observation, self.reward, terminated, False, info
+        # print("step:", self.n_step, "player", self.board.player * -1,"action:", (x, y), "reward:", self.reward + win_reward, "total reward:", self.total_reward)
+        
+        return self.observation, self.reward + win_reward, terminated, False, info
     
     def reset(self, seed=None, options=None):
         sys.stdout.write("reward: " + str(self.total_reward) + " in " + str(self.n_step) + " steps" + "\n")
         sys.stdout.flush()
         
         if render:
-            #display
+            # display
             pygame.quit()
             pygame.init()
             # Set the width and height of the screen [width, height]
@@ -124,15 +132,15 @@ class GomokuEnv(Env):
     def observation(self):
         new_board = self.board.board.copy() * self.board.player
         
-        player = (new_board == 1).astype(np.uint8)# current player is always 1, as black
-        opponent = (new_board == -1).astype(np.uint8)
+        player = (new_board == 1).astype(np.uint8) * 255# current player is always 1, as black
+        opponent = (new_board == -1).astype(np.uint8) * 255
         layers = [player, opponent]
         
         for user in self.last_eight_moves:# add last 8 moves
             for move in user:
                 layer = np.zeros((19, 19), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
-                    layer[move[0], move[1]] = 1
+                    layer[move[0], move[1]] = 255
                 layers.append(layer)
         
         return np.stack(layers, axis=-1).astype(np.uint8)
@@ -141,24 +149,44 @@ class GomokuEnv(Env):
     def reward(self):
         self_reward = 0.0
         opp_reward = 0.0
+        constant_reward = -0.2  # constant reward for each valid move to encourage shorter games
+        
+        # it might be confusing that the player reward looks like the opponent reward, because the self.board.player has already changed after the move
+        
+        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 2] * 100.0
+        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 1] * 10.0
+        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 0] * 1.0
+        
+        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 2] * 100.0
+        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 1] * 10.0
+        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 0] * 1.0
+        
+        return self_reward + opp_reward + constant_reward
+    
+    
+    # legacy reward function based on last continuous pieces
+    @property
+    def reward_legacy(self):
+        self_reward = 0.0
+        opp_reward = 0.0
         constant_reward = -0.2  # constant reward for each valid move to encourage longer games
         
         # reward shaping based on continuous pieces
-        if self.board.last_length[0 if self.board.player == 0 else 1] >= 5:
+        if self.board.last_length[0 if self.board.player == -1 else 1] >= 5:
             self_reward += 1000
-        elif self.board.last_length[0 if self.board.player == 0 else 1] == 4:
+        elif self.board.last_length[0 if self.board.player == -1 else 1] == 4:
             self_reward += 100.0
-        elif self.board.last_length[0 if self.board.player == 0 else 1] == 3:
+        elif self.board.last_length[0 if self.board.player == -1 else 1] == 3:
             self_reward += 1.0
-        elif self.board.last_length[0 if self.board.player == 0 else 1] == 2:
+        elif self.board.last_length[0 if self.board.player == -1 else 1] == 2:
             self_reward += 0.5
         
         # penalty for opponent's continuous pieces
-        if self.board.last_length[1 if self.board.player == 0 else 0] >= 5:
+        if self.board.last_length[1 if self.board.player == -1 else 0] >= 5:
             self_reward -= 500
-        elif self.board.last_length[1 if self.board.player == 0 else 0] == 4:
+        elif self.board.last_length[1 if self.board.player == -1 else 0] == 4:
             opp_reward -= 50.0
-        elif self.board.last_length[1 if self.board.player == 0 else 0] == 3:
+        elif self.board.last_length[1 if self.board.player == -1 else 0] == 3:
             opp_reward -= 1.0
             
         return self_reward + opp_reward + constant_reward
