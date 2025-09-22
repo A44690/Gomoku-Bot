@@ -1,12 +1,15 @@
 #gomoku env build based on Kairan Cao(my friend)'s gomoku game, 
-import time
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
+from gomoku_env import GomokuEnv
+from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
+from torch import optim
 import sys
 import numpy as np
 import pygame
-import random
-from stable_baselines3 import PPO
-from gomoku_env import GomokuEnv
-from CustomPolicy import CustomCnnPolicy
+import time
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
@@ -14,7 +17,6 @@ WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
 lines = []  # a list of all the lines on the board
-
 
 # coordinate of all the horizontal lines
 for i in range(19):
@@ -142,9 +144,8 @@ def highlight(screen,game_pos, color=RED):
 def main():
     board = Board()
 
-    policy_kwargs = dict(features_extractor_class=CustomCnnPolicy, features_extractor_kwargs=dict(features_dim=512),)
-
-    model = PPO.load("best_ppo_models/best_model/.", verbose=1, policy_kwargs=policy_kwargs)
+    policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+    model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
     print("model loaded")
     
     pygame.init()
@@ -158,10 +159,10 @@ def main():
     clock = pygame.time.Clock()
 
     screen.fill(WOOD)  # Draw the background color of the board
-    for x in range(20, 760, 40):  # Draw the vertical lines on the board
-        pygame.draw.line(screen, BLACK, (x, 20), (x, 740))
-    for y in range(20, 760, 40):  # Draw the horizontal lines on the board
-        pygame.draw.line(screen, BLACK, (20, y), (740, y))
+    for a in range(20, 760, 40):  # Draw the vertical lines on the board
+        pygame.draw.line(screen, BLACK, (a, 20), (a, 740))
+    for b in range(20, 760, 40):  # Draw the horizontal lines on the board
+        pygame.draw.line(screen, BLACK, (20, b), (740, b))
     pygame.display.flip()
     
     last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
@@ -186,8 +187,7 @@ def main():
                             pass
                         highlight(screen, game_pos)
                         pygame.display.flip()
-                        np.append(last_eight_moves[0], [game_pos[0], game_pos[1]])
-                        np.delete(last_eight_moves[0], 0)
+                        last_eight_moves[0 if board.player == 1 else 1] = np.append(last_eight_moves[0 if board.player == 1 else 1][1:], [tuple(game_pos)], axis=0)
                         board.play(game_pos)
             
         if board.player == -1:
@@ -205,15 +205,10 @@ def main():
                     layers.append(layer)
 
             obs = np.stack(layers, axis=-1).astype(np.uint8)
-            
-            # print(obs)
-            
-            model_action, _states = model.predict(obs, deterministic=True)
+            mask = (board.board.flatten() == 0).astype(np.int8)
+
+            model_action, _states = model.predict(obs, deterministic=True, action_masks=mask)
             x, y = divmod(model_action, 19)
-            while board.board[x, y] != 0:
-                # print("AI attempted illegal move at position:", (x, y))
-                model_action, _states = model.predict(obs, deterministic=False)
-                x, y = divmod(model_action, 19)
             pygame.draw.circle(screen, WHITE, np.flip((x, y)) * 40 + 20, 15)
             try:
                 highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous p2 move
@@ -221,8 +216,7 @@ def main():
                 pass
             highlight(screen, (x, y))
             pygame.display.flip()
-            np.append(last_eight_moves[1], [x, y])
-            np.delete(last_eight_moves[1], 0)
+            last_eight_moves[0 if board.player == 1 else 1] = np.append(last_eight_moves[0 if board.player == 1 else 1][1:], [[x, y]], axis=0)
             board.play((x, y))
             print("AI played at position:", (x, y))
                         

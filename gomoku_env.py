@@ -2,30 +2,29 @@ import time
 import sys
 import numpy as np
 import pygame
-import random
+import gymnasium.spaces as spaces
 from gomoku import Board, highlight
 from gymnasium import Env
-from gymnasium.spaces import Discrete, Box
+from sb3_contrib import MaskablePPO
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
+from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
+from torch import optim
+import sys
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
 WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
-render = False
-endgame_if_illegal = False
-enable_illegal_move_notification = False
-enable_illegal_move_penalty = False
-wait_time = 1  # time to wait after each move(s)
-
 class GomokuEnv(Env):
-    def __init__(self):
-        self.action_space = Discrete(19*19)
-        self.observation_space = Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)# 10 layers: 2 for player and opponent, 4 for last 8 moves of player, 4 for last 8 moves of opponent
+    def __init__(self, render = False, wait_time = 1, set_up=False):
+        self.action_space = spaces.Discrete(19*19)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)
         self.board = Board()
-        self.total_reward = 0.0
         self.n_step = 0
-        self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 8 moves of both players, initialized to invalid positions
+        self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
+        self.render = render
+        self.wait_time = wait_time
         
         if render:
             # display
@@ -43,66 +42,73 @@ class GomokuEnv(Env):
                 pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
             pygame.display.flip()
         
-    def step(self, action):
-        x, y = divmod(action, 19)
-        if self.board.board[x, y] != 0:# illegal move filter
-            info = {"illegal_move": True, "total_reward": self.total_reward, "reward": -100, "n_step": self.n_step}
-            if enable_illegal_move_notification:
-                sys.stdout.write("Illegal move at position " + str((x, y)) + "\n")
-                sys.stdout.flush()
-            ill_reward = 0
-            if enable_illegal_move_penalty:
-                self.total_reward -= 1000
-                ill_reward = -1000
-            return self.observation, ill_reward, False, endgame_if_illegal, info
-        
-        if render:
-            pygame.event.pump()
-            if self.board.player == 1:
-                pygame.draw.circle(self.screen, BLACK, np.flip((x, y)) * 40 + 20, 15)
-            else:
-                pygame.draw.circle(self.screen, WHITE, np.flip((x, y)) * 40 + 20, 15)
-            try:
-                highlight(self.screen, self.board.played_pos[-1], WOOD) # remove the highlighting of the previous player's move
-            except IndexError:
-                pass
-            highlight(self.screen, (x, y))
-            pygame.display.flip()
-            time.sleep(wait_time)
-        
-        # record the move of current player
-        np.append(self.last_eight_moves[0 if self.board.player == 1 else 1], [x, y])
-        np.delete(self.last_eight_moves[0 if self.board.player == 1 else 1], 0)
-        
-        self.board.play((x, y))
-        
-        terminated = self.board.finished or self.n_step >= 19*19
-        
-        win_reward = 0
-        if self.board.finished:# game over
-            win_reward = 1000
-            sys.stdout.write("Game over, the winner is: " + ("2 (White)" if self.board.player == 1 else "1 (Black)" + "\n"))
-            sys.stdout.flush()
-        elif self.n_step >= 19*19:
-            sys.stdout.write("Game over, draw" + "\n")
-            sys.stdout.flush()
-
-        self.total_reward += self.reward + win_reward
-        self.n_step += 1
-        info = {"invalid_move": False, "total_reward": self.total_reward, "reward": self.reward, "n_step": self.n_step}
-        
-        # print("step:", self.n_step, "player", self.board.player * -1,"action:", (x, y), "reward:", self.reward + win_reward, "total reward:", self.total_reward)
-        
-        return self.observation, self.reward + win_reward, terminated, False, info
+        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+        if not set_up:
+            self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
     
-    def reset(self, seed=None, options=None):
-        sys.stdout.write("reward: " + str(self.total_reward) + " in " + str(self.n_step) + " steps" + "\n")
+    def draw(self, x, y, color):
+        pygame.event.pump()
+        pygame.draw.circle(self.screen, color, np.flip((x, y)) * 40 + 20, 15)
+        try:
+            highlight(self.screen, self.board.played_pos[-1], WOOD) # remove the highlighting of the previous player's move
+        except IndexError:
+            pass
+        highlight(self.screen, (x, y))
+        pygame.display.flip()
+        time.sleep(self.wait_time)
+    
+    def step(self, action):
+        
+        x, y = divmod(action, 19)
+        
+        if self.render:
+            self.draw(x, y, BLACK)
+        
+        self.last_eight_moves[0] = np.append(self.last_eight_moves[0][1:], [[x, y]], axis=0)
+        self.board.play((x, y))# record the move of current player
+        sys.stdout.write("Player 1 (Black) played at position" + str((x, y)) + "\n")
+        
+        self.n_step += 1
+        info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
+        
+        if self.board.finished:# game over
+            reward = 10
+            sys.stdout.write("Game over, the winner is 1 (Black) in " + str(self.n_step) + " steps" + "\n")
+            return self.observation, reward, True, False, info
+        elif self.n_step >= 19*19 - 1:
+            reward = -5
+            sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
+            return self.observation, reward, True, False, info
+        
+        model_action, _states = self.model.predict(self.observation, deterministic=False, action_masks=self.legal_moves)
+        x, y = divmod(model_action, 19)
+        
+        if self.render:
+            self.draw(x, y, WHITE)
+        
+        self.last_eight_moves[1] = np.append(self.last_eight_moves[1][1:], [[x, y]], axis=0)
+        self.board.play((x, y))# record the move of current player
+        sys.stdout.write("Player 2 (White) played at position" + str((x, y)) + "\n")
+        
+        self.n_step += 1
+        info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
+        
+        if self.board.finished:# game over
+            reward = -10
+            sys.stdout.write("Game over, the winner is 2 (White) in " + str(self.n_step) + " steps" + "\n")
+            return self.observation, reward, True, False, info
+        elif self.n_step >= 19*19 - 1:
+            reward = -5
+            sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
+            return self.observation, reward, True, False, info
+
         sys.stdout.flush()
         
-        if render:
-            # display
-            pygame.quit()
-            pygame.init()
+        return self.observation, 0, False, False, info
+    
+    def reset(self, seed=None, options=None):
+        if self.render:
+            pygame.event.pump()
             # Set the width and height of the screen [width, height]
             self.size = (760, 760)
             self.screen = pygame.display.set_mode(self.size)
@@ -117,15 +123,16 @@ class GomokuEnv(Env):
             pygame.display.flip()
         
         self.board = Board()
-        self.total_reward = 0.0
         self.n_step = 0
-        self.max_length = [0, 0]
-        info = {"invalid_move": False, "total_reward": self.total_reward, "reward": self.reward, "n_step": self.n_step}
+        self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
+        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+        self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+        info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         return self.observation, info
     
     def close(self):
-        if render:
+        if self.render:
             pygame.quit()
     
     @property
@@ -146,47 +153,6 @@ class GomokuEnv(Env):
         return np.stack(layers, axis=-1).astype(np.uint8)
     
     @property
-    def reward(self):
-        self_reward = 0.0
-        opp_reward = 0.0
-        constant_reward = -0.2  # constant reward for each valid move to encourage shorter games
-        
-        # it might be confusing that the player reward looks like the opponent reward, because the self.board.player has already changed after the move
-        
-        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 2] * 100.0
-        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 1] * 10.0
-        self_reward += self.board.contiunous_num[0 if self.board.player == -1 else 1, 0] * 1.0
-        
-        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 2] * 100.0
-        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 1] * 10.0
-        opp_reward -= self.board.contiunous_num[1 if self.board.player == -1 else 0, 0] * 1.0
-        
-        return self_reward + opp_reward + constant_reward
-    
-    
-    # legacy reward function based on last continuous pieces
-    @property
-    def reward_legacy(self):
-        self_reward = 0.0
-        opp_reward = 0.0
-        constant_reward = -0.2  # constant reward for each valid move to encourage longer games
-        
-        # reward shaping based on continuous pieces
-        if self.board.last_length[0 if self.board.player == -1 else 1] >= 5:
-            self_reward += 1000
-        elif self.board.last_length[0 if self.board.player == -1 else 1] == 4:
-            self_reward += 100.0
-        elif self.board.last_length[0 if self.board.player == -1 else 1] == 3:
-            self_reward += 1.0
-        elif self.board.last_length[0 if self.board.player == -1 else 1] == 2:
-            self_reward += 0.5
-        
-        # penalty for opponent's continuous pieces
-        if self.board.last_length[1 if self.board.player == -1 else 0] >= 5:
-            self_reward -= 500
-        elif self.board.last_length[1 if self.board.player == -1 else 0] == 4:
-            opp_reward -= 50.0
-        elif self.board.last_length[1 if self.board.player == -1 else 0] == 3:
-            opp_reward -= 1.0
-            
-        return self_reward + opp_reward + constant_reward
+    def legal_moves(self):
+        # Flattened mask: 1 = legal, 0 = illegal
+        return (self.board.board.flatten() == 0).astype(np.int8)

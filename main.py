@@ -1,33 +1,46 @@
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import EvalCallback
-from stable_baselines3.common.monitor import Monitor
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from gomoku_env import GomokuEnv
-from CustomPolicy import CustomCnnPolicy
+from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
+from torch import optim
+from CustomCallback import CustomMaskableEvalCallback
 import sys
 
-env = GomokuEnv()
-env = Monitor(env)
+def mask_fn(env):
+    return env.legal_moves
 
-policy_kwargs = dict(features_extractor_class=CustomCnnPolicy, features_extractor_kwargs=dict(features_dim=512),)
+policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
 
-eval_callback = EvalCallback(env, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=1280, deterministic=False)
+train_env = None
+env_eval = None
 
 if (input("pretrain? (y/n)") == "y"):
+    train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
+    env_eval = ActionMasker(GomokuEnv(render=False), mask_fn) 
     model_name = input("model name: ")
-    model = PPO.load("ppo_models/" + model_name, env=env, verbose=1, n_steps=128, learning_rate=0.0001, policy_kwargs=policy_kwargs,tensorboard_log="./tensorboard/")
+    model = MaskablePPO.load("ppo_models/" + model_name, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model loaded")
 else:
-    model = PPO("CnnPolicy", env, verbose=1, n_steps=128, learning_rate=0.0001, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
+    train_env = ActionMasker(GomokuEnv(render=False, set_up=True), mask_fn)
+    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, policy_kwargs=policy_kwargs)
+    model.save("./best_ppo_models/best_model")
+    train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
+    env_eval = ActionMasker(GomokuEnv(render=False), mask_fn) 
+    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model created")
+
+eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=1024, deterministic=False, n_eval_episodes=10)
 
 while True:
     time_step = int(input("Enter time step: "))
     print("training for", time_step, "time steps")
-    env.reset()
+    train_env.reset()
     model = model.learn(total_timesteps=time_step, progress_bar=True, log_interval=1, tb_log_name="ppo_model", reset_num_timesteps=False, callback=eval_callback)
     model.save("ppo_models/ppo_model_" + str(model.num_timesteps))
     print("model saved")
-    env.reset()
+    train_env.reset()
     if (input("continue? (y/n)") == "n"):
         break
 
