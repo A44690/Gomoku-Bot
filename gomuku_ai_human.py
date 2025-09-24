@@ -170,6 +170,7 @@ def main():
     # -------- Main Program Loop -----------
     while not board.finished:
         # --- Main event loop
+        end = False
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 board.finished = True
@@ -189,6 +190,11 @@ def main():
                         pygame.display.flip()
                         last_eight_moves[0 if board.player == 1 else 1] = np.append(last_eight_moves[0 if board.player == 1 else 1][1:], [tuple(game_pos)], axis=0)
                         board.play(game_pos)
+                        if board.finished:
+                            end = True
+        
+        if end:
+            break
             
         if board.player == -1:
             new_board = board.board.copy() * board.player
@@ -207,7 +213,7 @@ def main():
             obs = np.stack(layers, axis=-1).astype(np.uint8)
             mask = (board.board.flatten() == 0).astype(np.int8)
 
-            model_action, _states = model.predict(obs, deterministic=True, action_masks=mask)
+            model_action, _states = model.predict(obs, deterministic=False, action_masks=mask)
             x, y = divmod(model_action, 19)
             pygame.draw.circle(screen, WHITE, np.flip((x, y)) * 40 + 20, 15)
             try:
@@ -220,7 +226,7 @@ def main():
             board.play((x, y))
             print("AI played at position:", (x, y))
                         
-    print("Game over! The winner is player", "2 (White)" if board.player == -1 else "1 (Black)")
+    print("Game over! The winner is player", "2 (White)" if board.player == 1 else "1 (Black)")
     # Close the window and quit.
     time.sleep(1)
     pygame.quit()

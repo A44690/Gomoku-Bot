@@ -82,7 +82,7 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
             self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
             self.logger.dump(self.num_timesteps)
 
-            if mean_reward >= 0: #self.best_mean_reward:
+            if mean_reward > 0: #self.best_mean_reward:
                 if self.verbose > 0:
                     print("New best!")
                 if self.best_model_save_path is not None:
