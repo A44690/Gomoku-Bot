@@ -213,7 +213,7 @@ def main():
             obs = np.stack(layers, axis=-1).astype(np.uint8)
             mask = (board.board.flatten() == 0).astype(np.int8)
 
-            model_action, _states = model.predict(obs, deterministic=False, action_masks=mask)
+            model_action, _states = model.predict(obs, deterministic=True, action_masks=mask)
             x, y = divmod(model_action, 19)
             pygame.draw.circle(screen, WHITE, np.flip((x, y)) * 40 + 20, 15)
             try:

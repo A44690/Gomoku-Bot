@@ -1,3 +1,5 @@
 /ppo_models
 /best_ppo_models
 /tensorboard
+/callback_logs
+/__pycache__

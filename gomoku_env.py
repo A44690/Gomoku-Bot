@@ -80,7 +80,7 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             return self.observation, reward, True, False, info
         
-        model_action, _states = self.model.predict(self.observation, deterministic=False, action_masks=self.legal_moves)
+        model_action, _states = self.model.predict(self.observation, deterministic=True, action_masks=self.legal_moves)
         x, y = divmod(model_action, 19)
         
         if self.render:

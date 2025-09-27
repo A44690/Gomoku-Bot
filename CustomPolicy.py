@@ -37,7 +37,7 @@ class CustomExtractor(BaseFeaturesExtractor):
             nn.ReLU()
         )
 
-        self.ResBlocks = nn.Sequential(*[residual_block(128) for i in range(8)]) # 8 residual blocks
+        self.ResBlocks = nn.Sequential(*[residual_block(128) for i in range(10)]) # 10 residual blocks
         self.flatten = nn.Flatten()
         
         with th.no_grad():
