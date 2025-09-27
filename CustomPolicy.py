@@ -80,17 +80,22 @@ class CustomNetwork(nn.Module):
         self.first_hidden_dim = 512
         self.second_hidden_dim = 1024
         self.third_hidden_dim = 512
+        self.fourth_hidden_dim = 512
 
         # Policy network
         self.policy_net = nn.Sequential(
             nn.Linear(feature_dim, self.first_hidden_dim),
             nn.ReLU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.1),
             nn.Linear(self.first_hidden_dim, self.second_hidden_dim),
             nn.BatchNorm1d(self.second_hidden_dim), 
             nn.ReLU(),
+            nn.Dropout(p=0.3),
             nn.Linear(self.second_hidden_dim, self.third_hidden_dim),
             nn.BatchNorm1d(self.third_hidden_dim), 
+            nn.ReLU(),
+            nn.Linear(self.third_hidden_dim, self.fourth_hidden_dim),
+            nn.BatchNorm1d(self.fourth_hidden_dim),
             nn.ReLU(),
             nn.Linear(self.third_hidden_dim, last_layer_dim_pi),
         )
@@ -98,12 +103,16 @@ class CustomNetwork(nn.Module):
         self.value_net = nn.Sequential(
             nn.Linear(feature_dim, self.first_hidden_dim),
             nn.ReLU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.1),
             nn.Linear(self.first_hidden_dim, self.second_hidden_dim),
             nn.BatchNorm1d(self.second_hidden_dim), 
             nn.ReLU(),
+            nn.Dropout(p=0.3),
             nn.Linear(self.second_hidden_dim, self.third_hidden_dim),
             nn.BatchNorm1d(self.third_hidden_dim), 
+            nn.ReLU(),
+            nn.Linear(self.third_hidden_dim, self.fourth_hidden_dim),
+            nn.BatchNorm1d(self.fourth_hidden_dim),
             nn.ReLU(),
             nn.Linear(self.third_hidden_dim, last_layer_dim_vf),
         )
