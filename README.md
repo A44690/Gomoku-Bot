@@ -38,7 +38,3 @@ Great thanks to Pygame, Numpy, Stable-Baselines3, Gymnasium, Pytorch, and Tensor
 Paper(s): 
 
 He, K., Zhang, X., Ren, S., & Sun, J. (2015, December 10). Deep residual learning for image recognition. arXiv.org. https://arxiv.org/abs/1512.03385 
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
