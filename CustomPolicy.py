@@ -78,8 +78,8 @@ class CustomNetwork(nn.Module):
         self.latent_dim_pi = last_layer_dim_pi
         self.latent_dim_vf = last_layer_dim_vf
         self.first_hidden_dim = 512
-        self.second_hidden_dim = 1024
-        self.third_hidden_dim = 512
+        self.second_hidden_dim = 2048
+        self.third_hidden_dim = 1024
         self.fourth_hidden_dim = 512
 
         # Policy network
@@ -94,10 +94,11 @@ class CustomNetwork(nn.Module):
             nn.Linear(self.second_hidden_dim, self.third_hidden_dim),
             nn.BatchNorm1d(self.third_hidden_dim), 
             nn.ReLU(),
+            nn.Dropout(p=0.2),
             nn.Linear(self.third_hidden_dim, self.fourth_hidden_dim),
             nn.BatchNorm1d(self.fourth_hidden_dim),
             nn.ReLU(),
-            nn.Linear(self.third_hidden_dim, last_layer_dim_pi),
+            nn.Linear(self.fourth_hidden_dim, last_layer_dim_pi),
         )
         # Value network
         self.value_net = nn.Sequential(
@@ -111,10 +112,11 @@ class CustomNetwork(nn.Module):
             nn.Linear(self.second_hidden_dim, self.third_hidden_dim),
             nn.BatchNorm1d(self.third_hidden_dim), 
             nn.ReLU(),
+            nn.Dropout(p=0.2),
             nn.Linear(self.third_hidden_dim, self.fourth_hidden_dim),
             nn.BatchNorm1d(self.fourth_hidden_dim),
             nn.ReLU(),
-            nn.Linear(self.third_hidden_dim, last_layer_dim_vf),
+            nn.Linear(self.fourth_hidden_dim, last_layer_dim_vf),
         )
         
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:

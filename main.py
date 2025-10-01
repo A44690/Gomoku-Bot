@@ -13,22 +13,15 @@ def mask_fn(env):
 
 policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
 
-train_env = None
-env_eval = None
+train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
+env_eval = ActionMasker(GomokuEnv(render=True, wait_time=0.1, eval_mode=True), mask_fn) 
 
 if (input("pretrain? (y/n)") == "y"):
-    train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
-    env_eval = ActionMasker(GomokuEnv(render=False), mask_fn) 
     model_name = input("model name: ")
     model = MaskablePPO.load("ppo_models/" + model_name, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model loaded")
 else:
-    train_env = ActionMasker(GomokuEnv(render=False, set_up=True), mask_fn)
-    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, policy_kwargs=policy_kwargs)
-    model.save("./best_ppo_models/best_model")
-    train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
-    env_eval = ActionMasker(GomokuEnv(render=False), mask_fn) 
-    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=1024, earning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
+    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model created")
 
 eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=1024, deterministic=True, n_eval_episodes=1)
@@ -36,11 +29,9 @@ eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_pa
 while True:
     time_step = int(input("Enter time step: "))
     print("training for", time_step, "time steps")
-    train_env.reset()
     model = model.learn(total_timesteps=time_step, progress_bar=True, log_interval=1, tb_log_name="ppo_model", reset_num_timesteps=False, callback=eval_callback)
     model.save("ppo_models/ppo_model_" + str(model.num_timesteps))
     print("model saved")
-    train_env.reset()
     if (input("continue? (y/n)") == "n"):
         break
 

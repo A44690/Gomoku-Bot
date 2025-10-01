@@ -17,7 +17,7 @@ WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
 class GomokuEnv(Env):
-    def __init__(self, render = False, wait_time = 1, set_up=False):
+    def __init__(self, render = False, wait_time = 1.0, eval_mode = False):
         self.action_space = spaces.Discrete(19*19)
         self.observation_space = spaces.Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)
         self.board = Board()
@@ -25,6 +25,9 @@ class GomokuEnv(Env):
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
         self.render = render
         self.wait_time = wait_time
+        self.random_move = False
+        self.color = BLACK
+        self.eval_mode = eval_mode
         
         if render:
             # display
@@ -43,8 +46,10 @@ class GomokuEnv(Env):
             pygame.display.flip()
         
         policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
-        if not set_up:
+        try:    
             self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+        except:
+            self.random_move = True
     
     def draw(self, x, y, color):
         pygame.event.pump()
@@ -57,45 +62,56 @@ class GomokuEnv(Env):
         pygame.display.flip()
         time.sleep(self.wait_time)
     
-    def step(self, action):
+    def opponent_move(self, color):
         
-        x, y = divmod(action, 19)
+        x, y = -1, -1
+        
+        if self.random_move:
+            legal_positions = np.argwhere(self.board.board == 0)
+            rad = np.random.choice(len(legal_positions))
+            x, y = legal_positions[rad]
+        else:
+            model_action, _states = self.model.predict(self.observation, deterministic=True, action_masks=self.legal_moves)
+            x, y = divmod(model_action, 19)
         
         if self.render:
-            self.draw(x, y, BLACK)
+            self.draw(x, y, color)
         
+        self.last_eight_moves[1] = np.append(self.last_eight_moves[1][1:], [[x, y]], axis=0)
+        self.board.play((x, y))# record the move of current player
+        sys.stdout.write("Player 2 played at position" + str((x, y)) + "\n")
+        
+    def step(self, action):
+        
+        # player's turn
+        x, y = divmod(action, 19)
+        if self.render:
+            self.draw(x, y, self.color)
         self.last_eight_moves[0] = np.append(self.last_eight_moves[0][1:], [[x, y]], axis=0)
         self.board.play((x, y))# record the move of current player
-        sys.stdout.write("Player 1 (Black) played at position" + str((x, y)) + "\n")
+        sys.stdout.write("Player 1 played at position" + str((x, y)) + "\n")
         
         self.n_step += 1
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         if self.board.finished:# game over
             reward = 10
-            sys.stdout.write("Game over, the winner is 1 (Black) in " + str(self.n_step) + " steps" + "\n")
+            sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             return self.observation, reward, True, False, info
         
-        model_action, _states = self.model.predict(self.observation, deterministic=True, action_masks=self.legal_moves)
-        x, y = divmod(model_action, 19)
-        
-        if self.render:
-            self.draw(x, y, WHITE)
-        
-        self.last_eight_moves[1] = np.append(self.last_eight_moves[1][1:], [[x, y]], axis=0)
-        self.board.play((x, y))# record the move of current player
-        sys.stdout.write("Player 2 (White) played at position" + str((x, y)) + "\n")
+        # opponent's turn
+        self.opponent_move(WHITE if self.color == BLACK else BLACK)
         
         self.n_step += 1
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         if self.board.finished:# game over
             reward = -10
-            sys.stdout.write("Game over, the winner is 2 (White) in " + str(self.n_step) + " steps" + "\n")
+            sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
@@ -125,8 +141,22 @@ class GomokuEnv(Env):
         self.board = Board()
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
+        self.color = BLACK
+        
         policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
-        self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+        try:    
+            self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+        except:
+            self.random_move = True
+        
+        if np.random.rand() > 0.5 or self.eval_mode:# opponent plays first
+            sys.stdout.write("Player 2 plays first\n")
+            self.color = WHITE
+            self.opponent_move(BLACK)
+            self.n_step += 1
+        else:
+            sys.stdout.write("Player 1 plays first\n")
+        
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         return self.observation, info
