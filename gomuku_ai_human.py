@@ -99,13 +99,13 @@ class Board:
                     pos_in_line[1] += offset
                 else:
                     pos_in_line[dim] += offset
-
-                positions.append(pos_in_line)
+                    
+                if pos_in_line.max() <= 18 and pos_in_line.min() >= 0:
+                    positions.append(pos_in_line)
 
             if dim is None:  # distinguish the 2 diagonals
                 top_left_to_p2_right_is_checked = True
 
-            positions = np.unique(np.clip(np.array(positions, dtype=np.int8), 0, 18), axis=0).tolist()
             occupied = self.has_pos(player, positions).tolist()  # 1d array of boolean values of if the positions on the line is occupied
             # add False at the start and end of "occupied" to ensure that it works properly at the edge of board
             occupied.insert(False, 0)
