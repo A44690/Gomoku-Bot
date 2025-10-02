@@ -49,6 +49,7 @@ class GomokuEnv(Env):
         try:    
             self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
         except:
+            sys.stdout.write("Model not found, opponent will play randomly\n")
             self.random_move = True
     
     def draw(self, x, y, color):
@@ -71,7 +72,7 @@ class GomokuEnv(Env):
             rad = np.random.choice(len(legal_positions))
             x, y = legal_positions[rad]
         else:
-            model_action, _states = self.model.predict(self.observation, deterministic=True, action_masks=self.legal_moves)
+            model_action, _states = self.model.predict(self.opponent_observation, deterministic=True, action_masks=self.legal_moves)
             x, y = divmod(model_action, 19)
         
         if self.render:
@@ -179,6 +180,23 @@ class GomokuEnv(Env):
         layers = [player, opponent]
         
         for user in self.last_eight_moves:# add last 8 moves
+            for move in user:
+                layer = np.zeros((19, 19), dtype=np.uint8)
+                if move[0] != 255 or move[1] != 255:
+                    layer[move[0], move[1]] = 255
+                layers.append(layer)
+        
+        return np.stack(layers, axis=-1).astype(np.uint8)
+    
+    @property
+    def opponent_observation(self):
+        new_board = self.board.board.copy() * self.board.player
+        
+        player = (new_board == 1).astype(np.uint8) * 255# current player is always 1, as black
+        opponent = (new_board == -1).astype(np.uint8) * 255
+        layers = [player, opponent]
+        
+        for user in self.last_eight_moves[::-1]:# add last 8 moves
             for move in user:
                 layer = np.zeros((19, 19), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
