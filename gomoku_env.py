@@ -97,10 +97,14 @@ class GomokuEnv(Env):
         if self.board.finished:# game over
             reward = 10
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
+            if self.render:
+                pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
+            if self.render:
+                pygame.quit()
             return self.observation, reward, True, False, info
         
         # opponent's turn
@@ -112,10 +116,14 @@ class GomokuEnv(Env):
         if self.board.finished:# game over
             reward = -10
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
+            if self.render:
+                pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
+            if self.render:
+                pygame.quit()
             return self.observation, reward, True, False, info
 
         sys.stdout.flush()
@@ -125,6 +133,8 @@ class GomokuEnv(Env):
     def reset(self, seed=None, options=None):
         if self.render:
             pygame.event.pump()
+            # display
+            pygame.init()
             # Set the width and height of the screen [width, height]
             self.size = (760, 760)
             self.screen = pygame.display.set_mode(self.size)
