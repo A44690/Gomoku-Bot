@@ -98,12 +98,14 @@ class GomokuEnv(Env):
             reward = 10
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
+                time.sleep(self.wait_time*10)
                 pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
+                time.sleep(self.wait_time*10)
                 pygame.quit()
             return self.observation, reward, True, False, info
         
@@ -117,12 +119,14 @@ class GomokuEnv(Env):
             reward = -10
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
+                time.sleep(self.wait_time*10)
                 pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
+                time.sleep(self.wait_time*10)
                 pygame.quit()
             return self.observation, reward, True, False, info
 
