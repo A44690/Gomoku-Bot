@@ -99,14 +99,12 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                pygame.quit()
             return self.observation, reward, True, False, info
         
         # opponent's turn
@@ -120,14 +118,12 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                pygame.quit()
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                pygame.quit()
             return self.observation, reward, True, False, info
 
         sys.stdout.flush()
@@ -137,14 +133,6 @@ class GomokuEnv(Env):
     def reset(self, seed=None, options=None):
         if self.render:
             pygame.event.pump()
-            # display
-            pygame.init()
-            # Set the width and height of the screen [width, height]
-            self.size = (760, 760)
-            self.screen = pygame.display.set_mode(self.size)
-            pygame.display.set_caption("Gomoku Game")
-            # Used to manage how fast the screen updates
-            self.clock = pygame.time.Clock()
             self.screen.fill(WOOD)  # Draw the background color of the board
             for x in range(20, 760, 40):  # Draw the vertical lines on the board
                 pygame.draw.line(self.screen, BLACK, (x, 20), (x, 740))
@@ -156,13 +144,16 @@ class GomokuEnv(Env):
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
         self.color = BLACK
-        
         policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         try:    
             self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
         except:
             self.random_move = True
         
+        if self.eval_mode:
+            sys.stdout.write("Evaluation mode\n")
+        
+        np.random.seed(seed)
         if np.random.rand() > 0.5 or self.eval_mode:# opponent plays first
             sys.stdout.write("Player 2 plays first\n")
             self.color = WHITE
