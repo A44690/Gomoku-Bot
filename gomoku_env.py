@@ -147,7 +147,7 @@ class GomokuEnv(Env):
         self.color = BLACK
         policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         try:    
-            self.model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+            self.model =  MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
         except:
             self.random_move = True
         

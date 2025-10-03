@@ -14,7 +14,7 @@ def mask_fn(env):
 policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
 
 train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
-env_eval = ActionMasker(GomokuEnv(render=True, wait_time=0.2, eval_mode=True), mask_fn) 
+env_eval = ActionMasker(GomokuEnv(render=False, wait_time=0.4, eval_mode=True), mask_fn) 
 
 if (input("pretrain? (y/n)") == "y"):
     model_name = input("model name: ")

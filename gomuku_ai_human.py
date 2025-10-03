@@ -188,7 +188,7 @@ def main():
                             pass
                         highlight(screen, game_pos)
                         pygame.display.flip()
-                        last_eight_moves[0 if board.player == 1 else 1] = np.append(last_eight_moves[0 if board.player == 1 else 1][1:], [tuple(game_pos)], axis=0)
+                        last_eight_moves[0] = np.append(last_eight_moves[0][1:], [tuple(game_pos)], axis=0)
                         board.play(game_pos)
                         if board.finished:
                             end = True
@@ -203,7 +203,7 @@ def main():
             opponent = (new_board == -1).astype(np.uint8) * 255
             layers = [player, opponent]
         
-            for user in last_eight_moves:# add last 8 moves
+            for user in last_eight_moves[::-1]:# add last 8 moves
                 for move in user:
                     layer = np.zeros((19, 19), dtype=np.uint8)
                     if move[0] != 255 or move[1] != 255:
@@ -222,7 +222,7 @@ def main():
                 pass
             highlight(screen, (x, y))
             pygame.display.flip()
-            last_eight_moves[0 if board.player == 1 else 1] = np.append(last_eight_moves[0 if board.player == 1 else 1][1:], [[x, y]], axis=0)
+            last_eight_moves[1] = np.append(last_eight_moves[1][1:], [[x, y]], axis=0)
             board.play((x, y))
             print("AI played at position:", (x, y))
                         
