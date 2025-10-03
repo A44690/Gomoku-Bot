@@ -2,7 +2,7 @@
 
 A reinforcement learning environment to train Gomoku AI
 
-Based on Stable-Baselines3's maskable, custom features extractor & custom actor-critic policy
+Based on Stable-Baselines3's maskablePPO, custom features extractor & custom actor-critic policy
 
 A major update about MCTS is planned.
 
