@@ -18,13 +18,13 @@ env_eval = ActionMasker(GomokuEnv(render=False, wait_time=0.4, eval_mode=True), 
 
 if (input("pretrain? (y/n)") == "y"):
     model_name = input("model name: ")
-    model = MaskablePPO.load("ppo_models/" + model_name, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
+    model = MaskablePPO.load("ppo_models/" + model_name, env=train_env, verbose=1, n_steps=512, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model loaded")
 else:
-    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=1024, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
+    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=512, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model created")
 
-eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=1024, deterministic=True, n_eval_episodes=1)
+eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=512, deterministic=True, n_eval_episodes=1)
 
 while True:
     time_step = int(input("Enter time step: "))
