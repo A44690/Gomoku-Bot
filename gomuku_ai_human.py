@@ -144,7 +144,7 @@ def highlight(screen,game_pos, color=RED):
 def main():
     board = Board()
 
-    policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+    policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
     model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
     print("model loaded")
     
@@ -199,18 +199,18 @@ def main():
         if board.player == -1:
             new_board = board.board.copy() * board.player
         
-            player = (new_board == 1).astype(np.uint8) * 255# current player is always 1, as black
-            opponent = (new_board == -1).astype(np.uint8) * 255
+            player = (new_board == 1).astype(np.uint8)# current player is always 1, as black
+            opponent = (new_board == -1).astype(np.uint8)
             layers = [player, opponent]
         
             for user in last_eight_moves[::-1]:# add last 8 moves
                 for move in user:
                     layer = np.zeros((19, 19), dtype=np.uint8)
                     if move[0] != 255 or move[1] != 255:
-                        layer[move[0], move[1]] = 255
+                        layer[move[0], move[1]] = 1
                     layers.append(layer)
 
-            obs = np.stack(layers, axis=-1).astype(np.uint8)
+            obs = np.stack(layers, axis=0).astype(np.uint8)
             mask = (board.board.flatten() == 0).astype(np.int8)
 
             model_action, _states = model.predict(obs, deterministic=True, action_masks=mask)

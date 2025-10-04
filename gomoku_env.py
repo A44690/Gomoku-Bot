@@ -19,7 +19,7 @@ RED = (0xff, 0, 0)
 class GomokuEnv(Env):
     def __init__(self, render = False, wait_time = 1.0, eval_mode = False):
         self.action_space = spaces.Discrete(19*19)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(19, 19, 10), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(10, 19, 19), dtype=np.uint8)
         self.board = Board()
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
@@ -45,7 +45,7 @@ class GomokuEnv(Env):
                 pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
             pygame.display.flip()
         
-        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         try:    
             self.model =  MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
         except:
@@ -96,13 +96,13 @@ class GomokuEnv(Env):
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         if self.board.finished:# game over
-            reward = 10
+            reward = 1
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
-            reward = -5
+            reward = 0
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
@@ -115,7 +115,7 @@ class GomokuEnv(Env):
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
         if self.board.finished:# game over
-            reward = -10
+            reward = -1
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
@@ -145,10 +145,11 @@ class GomokuEnv(Env):
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
         self.color = BLACK
-        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=512), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         try:    
             self.model =  MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
         except:
+            sys.stdout.write("Model not found, opponent will play randomly\n")
             self.random_move = True
         
         if self.eval_mode:
@@ -175,35 +176,35 @@ class GomokuEnv(Env):
     def observation(self):
         new_board = self.board.board.copy() * self.board.player
         
-        player = (new_board == 1).astype(np.uint8) * 255# current player is always 1, as black
-        opponent = (new_board == -1).astype(np.uint8) * 255
+        player = (new_board == 1).astype(np.uint8)# current player is always 1, as black
+        opponent = (new_board == -1).astype(np.uint8)
         layers = [player, opponent]
         
         for user in self.last_eight_moves:# add last 8 moves
             for move in user:
                 layer = np.zeros((19, 19), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
-                    layer[move[0], move[1]] = 255
+                    layer[move[0], move[1]] = 1
                 layers.append(layer)
         
-        return np.stack(layers, axis=-1).astype(np.uint8)
+        return np.stack(layers, axis=0).astype(np.uint8)
     
     @property
     def opponent_observation(self):
         new_board = self.board.board.copy() * self.board.player
         
-        player = (new_board == 1).astype(np.uint8) * 255# current player is always 1, as black
-        opponent = (new_board == -1).astype(np.uint8) * 255
+        player = (new_board == 1).astype(np.uint8)# current player is always 1, as black
+        opponent = (new_board == -1).astype(np.uint8)
         layers = [player, opponent]
         
         for user in self.last_eight_moves[::-1]:# add last 8 moves
             for move in user:
                 layer = np.zeros((19, 19), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
-                    layer[move[0], move[1]] = 255
+                    layer[move[0], move[1]] = 1
                 layers.append(layer)
         
-        return np.stack(layers, axis=-1).astype(np.uint8)
+        return np.stack(layers, axis=0).astype(np.uint8)
     
     @property
     def legal_moves(self):

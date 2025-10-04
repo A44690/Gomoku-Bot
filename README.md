@@ -33,6 +33,14 @@ pip install tensorflow
 
 Great thanks to Pygame, Numpy, Stable-Baselines3, Gymnasium, Pytorch, and TensorFlow developers and Maintainers!
 
-Paper(s): 
 
-He, K., Zhang, X., Ren, S., & Sun, J. (2015, December 10). Deep residual learning for image recognition. arXiv.org. https://arxiv.org/abs/1512.03385 
+### Paper(s): 
+
+He, K., Zhang, X., Ren, S., & Sun, J. (2015). Deep Residual Learning for Image Recognition (Version 1). Version 1. arXiv. https://doi.org/10.48550/ARXIV.1512.03385
+
+Silver, D., Schrittwieser, J., Simonyan, K., Antonoglou, I., Huang, A., Guez, A., … Hassabis, D. (2017). Mastering the game of Go without human knowledge. Nature, 550(7676), 354–359. https://doi.org/10.1038/nature24270
+
+
+### Special Thanks:
+
+@Rin~ for giving us a Nature subscription so we can reference papers on Nature.
