@@ -28,6 +28,8 @@ class GomokuEnv(Env):
         self.random_move = False
         self.color = BLACK
         self.eval_mode = eval_mode
+        self.step_count = 0
+        self.policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         
         if render:
             # display
@@ -45,9 +47,8 @@ class GomokuEnv(Env):
                 pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
             pygame.display.flip()
         
-        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         try:    
-            self.model =  MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
+            self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
         except:
             sys.stdout.write("Model not found, opponent will play randomly\n")
             self.random_move = True
@@ -84,6 +85,17 @@ class GomokuEnv(Env):
         
     def step(self, action):
         
+        self.step_count += 1
+        if self.step_count % 256 == 1 and self.eval_mode == False:#reload the model every 256 steps which should be right after the evaluation
+            self.step_count = self.step_count % 256
+            sys.stdout.write("Reloading the opponent model...\n")
+            try:    
+                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+            except:
+                sys.stdout.write("Model not found, opponent will play randomly\n")
+                self.random_move = True
+            sys.stdout.write("Opponent model reloaded\n")
+            
         # player's turn
         x, y = divmod(action, 19)
         if self.render:
@@ -126,7 +138,7 @@ class GomokuEnv(Env):
             if self.render:
                 time.sleep(self.wait_time*10)
             return self.observation, reward, True, False, info
-
+        
         sys.stdout.flush()
         
         return self.observation, 0, False, False, info
@@ -145,15 +157,14 @@ class GomokuEnv(Env):
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
         self.color = BLACK
-        policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
-        try:    
-            self.model =  MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
-        except:
-            sys.stdout.write("Model not found, opponent will play randomly\n")
-            self.random_move = True
         
         if self.eval_mode:
             sys.stdout.write("Evaluation mode\n")
+            try:    
+                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+            except:
+                sys.stdout.write("Model not found, opponent will play randomly\n")
+                self.random_move = True
         
         np.random.seed(seed)
         if np.random.rand() > 0.5 or self.eval_mode:# opponent plays first
