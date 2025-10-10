@@ -20,7 +20,6 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
     
     def _on_rollout_start(self) -> None:
         if self.every_two_rollouts:
-            self.every_two_rollouts = not self.every_two_rollouts
             # Reset success rate buffer
             self._is_success_buffer = []
 
@@ -85,3 +84,5 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
                 if self.best_model_save_path is not None:
                     self.model.save(os.path.join(self.best_model_save_path, "best_model"))
                 self.best_mean_reward = float(mean_reward)
+                
+        self.every_two_rollouts = not self.every_two_rollouts
