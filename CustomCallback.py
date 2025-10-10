@@ -1,6 +1,8 @@
 import os
 
 import numpy as np
+import time
+
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import sync_envs_normalization
 
@@ -8,22 +10,17 @@ from sb3_contrib.common.maskable.evaluation import evaluate_policy
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 
 class CustomMaskableEvalCallback(MaskableEvalCallback):
-    '''Mostly changed except mean reward eval, credits to SB3 devs'''
+    '''Alternate eval callback on rollout start, credits to SB3 devs'''
+    def __init__(self, *args, **kwargs):
+        super(CustomMaskableEvalCallback, self).__init__(*args, **kwargs)
+        self.every_two_rollouts = True  # evaluate at the start of each rollout
+    
     def _on_step(self) -> bool:
-        continue_training = True
-
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            # Sync training and eval env if there is VecNormalize
-            if self.model.get_vec_normalize_env() is not None:
-                try:
-                    sync_envs_normalization(self.training_env, self.eval_env)
-                except AttributeError as e:
-                    raise AssertionError(
-                        "Training and eval env are not wrapped the same way, "
-                        "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
-                        "and warning above."
-                    ) from e
-
+        return True  # only evaluate at the start of the rollout
+    
+    def _on_rollout_start(self) -> None:
+        if self.every_two_rollouts:
+            self.every_two_rollouts = not self.every_two_rollouts
             # Reset success rate buffer
             self._is_success_buffer = []
 
@@ -88,13 +85,3 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
                 if self.best_model_save_path is not None:
                     self.model.save(os.path.join(self.best_model_save_path, "best_model"))
                 self.best_mean_reward = float(mean_reward)
-                # Trigger callback on new best model, if needed
-                if self.callback_on_new_best is not None:
-                    continue_training = self.callback_on_new_best.on_step()
-
-            # Trigger callback after every evaluation, if needed
-            if self.callback is not None:
-                continue_training = continue_training and self._on_event()
-
-        return continue_training
-
