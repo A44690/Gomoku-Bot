@@ -28,6 +28,7 @@ class GomokuEnv(Env):
         self.random_move = False
         self.color = BLACK
         self.eval_mode = eval_mode
+        self.white_start_overide = True
         self.step_count = 0
         self.policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
         
@@ -112,12 +113,18 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
+                
+            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+                
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = 0
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
+                
+            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+                
             return self.observation, reward, True, False, info
         
         # opponent's turn
@@ -131,12 +138,18 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
+                
+            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+                
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
+                
+            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+                            
             return self.observation, reward, True, False, info
         
         sys.stdout.flush()
@@ -167,7 +180,7 @@ class GomokuEnv(Env):
                 self.random_move = True
         
         np.random.seed(seed)
-        if np.random.rand() > 0.5 or self.eval_mode:# opponent plays first
+        if (self.eval_mode and self.white_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
             sys.stdout.write("Player 2 plays first\n")
             self.color = WHITE
             self.opponent_move(BLACK)

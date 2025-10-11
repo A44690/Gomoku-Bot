@@ -25,7 +25,7 @@ else:
     model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=128, learning_rate=1e-4, policy_kwargs=policy_kwargs, tensorboard_log="./tensorboard/")
     print("model created")
 
-eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=256, deterministic=True, n_eval_episodes=1)
+eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path="./best_ppo_models/", log_path="./callback_logs/", eval_freq=256, deterministic=True, n_eval_episodes=2)
 
 while True:
     time_step = int(input("Enter time step: "))
