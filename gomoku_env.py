@@ -173,12 +173,13 @@ class GomokuEnv(Env):
         
         if self.eval_mode:
             sys.stdout.write("Evaluation mode\n")
-            try:    
-                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
-            except:
-                sys.stdout.write("Model not found, opponent will play randomly\n")
-                self.random_move = True
-        
+            if self.white_start_overide: 
+                try:    
+                    self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                except:
+                    sys.stdout.write("Model not found, opponent will play randomly\n")
+                    self.random_move = True
+            
         np.random.seed(seed)
         if (self.eval_mode and self.white_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
             sys.stdout.write("Player 2 plays first\n")

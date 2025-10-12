@@ -12,9 +12,14 @@ import sys
 def mask_fn(env):
     return env.legal_moves
 
+def make_env():
+    env = GomokuEnv(render=False)
+    env = ActionMasker(env, mask_fn)
+    return env
+
 policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
 
-train_env = ActionMasker(GomokuEnv(render=False), mask_fn)
+train_env = make_vec_env(make_env, n_envs=1)
 env_eval = ActionMasker(GomokuEnv(render=False, eval_mode=True), mask_fn) 
 
 if (input("pretrain? (y/n)") == "y"):
