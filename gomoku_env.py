@@ -19,7 +19,12 @@ RED = (0xff, 0, 0)
 class GomokuEnv(Env):
     def __init__(self, render = False, wait_time = 1.0, eval_mode = False):
         self.action_space = spaces.Discrete(19*19)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(10, 19, 19), dtype=np.uint8)
+        self.observation_space = spaces.Box(
+            low=0, 
+            high=1, 
+            shape=(10, 19, 19), 
+            dtype=np.uint8
+            )
         self.board = Board()
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
@@ -28,9 +33,14 @@ class GomokuEnv(Env):
         self.random_move = False
         self.color = BLACK
         self.eval_mode = eval_mode
-        self.white_start_overide = True
+        self.second_start_overide = True
         self.step_count = 0
-        self.policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+        self.policy_kwargs = dict(
+            features_extractor_class=CustomExtractor, 
+            features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), 
+            optimizer_class=optim.AdamW, 
+            optimizer_kwargs=dict(weight_decay=1e-5)
+            )
         
         if render:
             # display
@@ -114,7 +124,7 @@ class GomokuEnv(Env):
             if self.render:
                 time.sleep(self.wait_time*10)
                 
-            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+            self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
                 
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
@@ -123,7 +133,7 @@ class GomokuEnv(Env):
             if self.render:
                 time.sleep(self.wait_time*10)
                 
-            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+            self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
                 
             return self.observation, reward, True, False, info
         
@@ -139,7 +149,7 @@ class GomokuEnv(Env):
             if self.render:
                 time.sleep(self.wait_time*10)
                 
-            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+            self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
                 
             return self.observation, reward, True, False, info
         elif self.n_step >= 19*19 - 1:
@@ -148,7 +158,7 @@ class GomokuEnv(Env):
             if self.render:
                 time.sleep(self.wait_time*10)
                 
-            self.white_start_overide = not self.white_start_overide# switch the starting player in eval mode
+            self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
                             
             return self.observation, reward, True, False, info
         
@@ -173,7 +183,7 @@ class GomokuEnv(Env):
         
         if self.eval_mode:
             sys.stdout.write("Evaluation mode\n")
-            if self.white_start_overide: 
+            if self.second_start_overide: 
                 try:    
                     self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
                 except:
@@ -181,7 +191,7 @@ class GomokuEnv(Env):
                     self.random_move = True
             
         np.random.seed(seed)
-        if (self.eval_mode and self.white_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
+        if (self.eval_mode and self.second_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
             sys.stdout.write("Player 2 plays first\n")
             self.color = WHITE
             self.opponent_move(BLACK)
