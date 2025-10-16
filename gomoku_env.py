@@ -25,8 +25,8 @@ class GomokuEnv(Env):
         eval_mode = False, 
         old_models_folder_path = "ppo_models/", 
         best_models_folder_path = "best_ppo_models/", 
-        best_model_opponent_percentage = 0.55, 
-        old_model_opponent_percentage = 0.05
+        best_model_opponent_percentage = 0.4, 
+        old_model_opponent_percentage = 0.2
         ):
         
         self.action_space = spaces.Discrete(19*19)
