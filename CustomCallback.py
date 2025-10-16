@@ -14,8 +14,14 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
     def __init__(self, *args, **kwargs):
         super(CustomMaskableEvalCallback, self).__init__(*args, **kwargs)
         self.every_two_rollouts = True  # evaluate at the start of each rollout
+        self.last_model = None
+        self.count_since_last_save = 0
     
     def _on_step(self) -> bool:
+        if self.n_calls % self.eval_freq == 0:
+            if not self.last_model == None:
+                self.count_since_last_save = (self.count_since_last_save + 1) % 10
+                self.model.save(os.path.join(self.best_model_save_path, "best_model_" + str(self.count_since_last_save)))
         return True  # only evaluate at the start of the rollout
     
     def _on_rollout_start(self) -> None:
@@ -83,6 +89,7 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
                     print("New best!")
                 if self.best_model_save_path is not None:
                     self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+                    self.last_model = self.model
                 self.best_mean_reward = float(mean_reward)
                 
         self.every_two_rollouts = not self.every_two_rollouts

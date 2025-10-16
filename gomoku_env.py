@@ -18,7 +18,17 @@ WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
 class GomokuEnv(Env):
-    def __init__(self, render = False, wait_time = 1.0, eval_mode = False, models_folder_path = "ppo_models/", best_model_opponent_percentage = 0.25):
+    def __init__(
+        self, 
+        render = False, 
+        wait_time = 1.0, 
+        eval_mode = False, 
+        old_models_folder_path = "ppo_models/", 
+        best_models_folder_path = "best_ppo_models/", 
+        best_model_opponent_percentage = 0.55, 
+        old_model_opponent_percentage = 0.05
+        ):
+        
         self.action_space = spaces.Discrete(19*19)
         self.observation_space = spaces.Box(
             low=0, 
@@ -42,13 +52,16 @@ class GomokuEnv(Env):
             optimizer_class=optim.AdamW, 
             optimizer_kwargs=dict(weight_decay=1e-5)
             )
-        self.model_list = []
+        self.old_models_list = []
+        self.best_models_folder_path = best_models_folder_path
         self.best_model_opponent_percentage = best_model_opponent_percentage
+        self.old_model_opponent_percentage = old_model_opponent_percentage
         self.last_model_index = -2
+        self.loop_prevent = 0
         
-        for file in os.listdir(models_folder_path):
+        for file in os.listdir(old_models_folder_path):
             if file.endswith(".zip"):
-                self.model_list.append(models_folder_path + file)
+                self.old_models_list.append(old_models_folder_path + file)
         
         self.load_opponent_model()
         
@@ -72,7 +85,9 @@ class GomokuEnv(Env):
         #select random opponent model from the models folder
         random_number = np.random.rand()
         
-        if random_number < self.best_model_opponent_percentage and self.last_model_index != -1: #play with best model
+        if random_number < self.best_model_opponent_percentage: #play with best model
+            if self.last_model_index == -1: #avoid playing with the same model twice in a row
+                return
             sys.stdout.write("Opponent will play with the best model\n")
             self.last_model_index = -1
             try:
@@ -80,22 +95,46 @@ class GomokuEnv(Env):
             except:
                 sys.stdout.write("Error, opponent will play randomly\n")
                 self.random_move = True
-        else: #play with an older model or randomly
-            random_number = int(random_number / (1 - self.best_model_opponent_percentage) * (len(self.model_list) + 1))
-            if random_number != self.last_model_index: #avoid playing with the same model twice in a row
-                if random_number < len(self.model_list): #play with an older model
-                    model_path = self.model_list[random_number]
-                    sys.stdout.write("Selected opponent model: " + model_path + "\n")
-                    try:
-                        self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
-                    except:
-                        sys.stdout.write("Error, opponent will play randomly\n")
-                        self.random_move = True
-                else: #play randomly
-                    sys.stdout.write("Opponent will play randomly\n")
+                
+        elif random_number - self.best_model_opponent_percentage < self.old_model_opponent_percentage: #play with an old model
+            random_number = int((random_number - self.best_model_opponent_percentage) / (self.old_model_opponent_percentage) * (len(self.old_models_list) + 1))
+            if random_number == self.last_model_index: #avoid playing with the same model twice in a row
+                return
+            if random_number < len(self.old_models_list): #play with an older model
+                print(random_number)
+                model_path = self.old_models_list[random_number]
+                sys.stdout.write("Selected opponent model: " + model_path + "\n")
+                try:
+                    self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+                except:
+                    sys.stdout.write("Error, opponent will play randomly\n")
                     self.random_move = True
-                self.last_model_index = random_number
-    
+            else: #play randomly
+                sys.stdout.write("Opponent will play randomly\n")
+                self.random_move = True
+            self.last_model_index = random_number
+                
+        else: #use older best model
+            random_number = int((random_number - self.best_model_opponent_percentage - self.old_model_opponent_percentage) / (1 - self.best_model_opponent_percentage - self.old_model_opponent_percentage) * 10)
+            if random_number == self.last_model_index: #avoid playing with the same model twice in a row
+                return
+            model_path = self.best_models_folder_path + "best_model_" + str(random_number)
+            sys.stdout.write("Selected opponent model: " + model_path + "\n")
+            try:
+                self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+            except:
+                self.loop_prevent += 1
+                if self.loop_prevent > 5:
+                    sys.stdout.write("Error, opponent will play randomly\n")
+                    self.random_move = True
+                else:
+                    self.load_opponent_model()
+                    self.last_model_index = 255
+                self.loop_prevent = 0
+            else:
+                self.last_model_index = -2 - random_number
+        return
+
     def draw(self, x, y, color):
         pygame.event.pump()
         pygame.draw.circle(self.screen, color, np.flip((x, y)) * 40 + 20, 15)
