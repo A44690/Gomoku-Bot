@@ -9,7 +9,7 @@ import gymnasium.spaces as spaces
 
 class residual_block(nn.Module):
     '''from https://doi.org/10.48550/arXiv.1512.03385. not the basic resnet block in the paper, but the one used in AlphaGo Zero'''
-    def __init__(self, in_channels, mid_channels, out_channels, kernel_size=3, stride=1, dropout_prob=0.15):
+    def __init__(self, in_channels, mid_channels, out_channels, kernel_size=3, stride=1, dropout_prob=0.5):
         super().__init__()
         self.block = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=kernel_size, stride=stride, padding=1), 
