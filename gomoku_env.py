@@ -209,8 +209,6 @@ class GomokuEnv(Env):
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
         self.color = BLACK
         
-        self.load_opponent_model()
-        
         if self.eval_mode:
             sys.stdout.write("Evaluation mode\n")
             if self.second_start_overide: 
@@ -219,6 +217,8 @@ class GomokuEnv(Env):
                 except:
                     sys.stdout.write("Model not found, opponent will play randomly\n")
                     self.random_move = True
+        else:
+            self.load_opponent_model()
             
         np.random.seed(seed)
         if (self.eval_mode and self.second_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
