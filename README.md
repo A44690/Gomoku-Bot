@@ -4,7 +4,7 @@ A reinforcement learning environment to train Gomoku AI
 
 Based on Stable-Baselines3's maskablePPO, custom features extractor & custom actor-critic policy
 
-A major update about MCTS is planned.
+A human training mode will be added soon and a update about MCTS is planned.
 
 ## Required Packages
 Pygame, Numpy, Stable-Baselines3, Sb3-contrib, Gymnasium, and Pytorch required

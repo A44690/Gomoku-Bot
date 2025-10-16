@@ -2,6 +2,8 @@ import time
 import sys
 import numpy as np
 import pygame
+import torch as th
+import os
 import gymnasium.spaces as spaces
 from gomoku import Board, highlight
 from gymnasium import Env
@@ -9,7 +11,6 @@ from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
 from torch import optim
-import sys
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
@@ -17,7 +18,7 @@ WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
 class GomokuEnv(Env):
-    def __init__(self, render = False, wait_time = 1.0, eval_mode = False):
+    def __init__(self, render = False, wait_time = 1.0, eval_mode = False, models_folder_path = "ppo_models/", best_model_opponent_percentage = 0.25):
         self.action_space = spaces.Discrete(19*19)
         self.observation_space = spaces.Box(
             low=0, 
@@ -41,6 +42,15 @@ class GomokuEnv(Env):
             optimizer_class=optim.AdamW, 
             optimizer_kwargs=dict(weight_decay=1e-5)
             )
+        self.model_list = []
+        self.best_model_opponent_percentage = best_model_opponent_percentage
+        self.last_model_index = -2
+        
+        for file in os.listdir(models_folder_path):
+            if file.endswith(".zip"):
+                self.model_list.append(models_folder_path + file)
+        
+        self.load_opponent_model()
         
         if render:
             # display
@@ -57,12 +67,34 @@ class GomokuEnv(Env):
             for y in range(20, 760, 40):  # Draw the horizontal lines on the board
                 pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
             pygame.display.flip()
+    
+    def load_opponent_model(self):
+        #select random opponent model from the models folder
+        random_number = np.random.rand()
         
-        try:    
-            self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
-        except:
-            sys.stdout.write("Model not found, opponent will play randomly\n")
-            self.random_move = True
+        if random_number < self.best_model_opponent_percentage and self.last_model_index != -1: #play with best model
+            sys.stdout.write("Opponent will play with the best model\n")
+            self.last_model_index = -1
+            try:
+                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+            except:
+                sys.stdout.write("Error, opponent will play randomly\n")
+                self.random_move = True
+        else: #play with an older model or randomly
+            random_number = int(random_number / (1 - self.best_model_opponent_percentage) * (len(self.model_list) + 1))
+            if random_number != self.last_model_index: #avoid playing with the same model twice in a row
+                if random_number < len(self.model_list): #play with an older model
+                    model_path = self.model_list[random_number]
+                    sys.stdout.write("Selected opponent model: " + model_path + "\n")
+                    try:
+                        self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+                    except:
+                        sys.stdout.write("Error, opponent will play randomly\n")
+                        self.random_move = True
+                else: #play randomly
+                    sys.stdout.write("Opponent will play randomly\n")
+                    self.random_move = True
+                self.last_model_index = random_number
     
     def draw(self, x, y, color):
         pygame.event.pump()
@@ -97,14 +129,10 @@ class GomokuEnv(Env):
     def step(self, action):
         
         self.step_count += 1
-        if self.step_count % 256 == 1 and self.eval_mode == False:#reload the model every 256 steps which should be right after the evaluation
+        if self.step_count % 256 == 1 and self.eval_mode == False: #reload the model every 256 steps which should be right after the evaluation
             self.step_count = self.step_count % 256
             sys.stdout.write("Reloading the opponent model...\n")
-            try:    
-                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
-            except:
-                sys.stdout.write("Model not found, opponent will play randomly\n")
-                self.random_move = True
+            self.load_opponent_model()
             sys.stdout.write("Opponent model reloaded\n")
             
         # player's turn
@@ -180,6 +208,8 @@ class GomokuEnv(Env):
         self.n_step = 0
         self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
         self.color = BLACK
+        
+        self.load_opponent_model()
         
         if self.eval_mode:
             sys.stdout.write("Evaluation mode\n")
