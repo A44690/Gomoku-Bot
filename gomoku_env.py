@@ -25,8 +25,8 @@ class GomokuEnv(Env):
         eval_mode = False, 
         old_models_folder_path = "ppo_models/", 
         best_models_folder_path = "best_ppo_models/", 
-        best_model_opponent_percentage = 0.4, 
-        old_model_opponent_percentage = 0.2
+        best_model_opponent_percentage = 0.8, 
+        old_model_opponent_percentage = 0.05
         ):
         
         self.action_space = spaces.Discrete(19*19)
@@ -82,9 +82,10 @@ class GomokuEnv(Env):
             pygame.display.flip()
     
     def load_opponent_model(self):
-        #select random opponent model from the models folder
-        random_number = np.random.rand()
+        #select random opponent model from the models folder, to avoid overfitting
         
+        self.random_move = False
+        random_number = np.random.rand()
         if random_number < self.best_model_opponent_percentage: #play with best model
             if self.last_model_index == -1: #avoid playing with the same model twice in a row
                 return
@@ -101,7 +102,6 @@ class GomokuEnv(Env):
             if random_number == self.last_model_index: #avoid playing with the same model twice in a row
                 return
             if random_number < len(self.old_models_list): #play with an older model
-                print(random_number)
                 model_path = self.old_models_list[random_number]
                 sys.stdout.write("Selected opponent model: " + model_path + "\n")
                 try:
@@ -155,7 +155,7 @@ class GomokuEnv(Env):
             rad = np.random.choice(len(legal_positions))
             x, y = legal_positions[rad]
         else:
-            model_action, _states = self.model.predict(self.opponent_observation, deterministic=True, action_masks=self.legal_moves)
+            model_action, _states = self.model.predict(self.opponent_observation, deterministic=False, action_masks=self.legal_moves)
             x, y = divmod(model_action, 19)
         
         if self.render:
