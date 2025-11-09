@@ -58,6 +58,9 @@ class GomokuEnv(Env):
         self.old_model_opponent_percentage = old_model_opponent_percentage
         self.last_model_index = -2
         self.loop_prevent = 0
+        self.total_scores = [0, 0] # [player1 stats, player2 stats]
+        self.total_episodes = [0, 0]
+        self.random_threshold = 0.5
         
         for file in os.listdir(old_models_folder_path):
             if file.endswith(".zip"):
@@ -83,7 +86,6 @@ class GomokuEnv(Env):
     
     def load_opponent_model(self):
         #select random opponent model from the models folder, to avoid overfitting
-        
         self.random_move = False
         random_number = np.random.rand()
         if random_number < self.best_model_opponent_percentage: #play with best model
@@ -147,13 +149,12 @@ class GomokuEnv(Env):
         time.sleep(self.wait_time)
     
     def opponent_move(self, color):
-        
         x, y = -1, -1
         
         if self.random_move:
             legal_positions = np.argwhere(self.board.board == 0)
-            rad = np.random.choice(len(legal_positions))
-            x, y = legal_positions[rad]
+            random = np.random.choice(len(legal_positions))
+            x, y = legal_positions[random]
         else:
             model_action, _states = self.model.predict(self.opponent_observation, deterministic=False, action_masks=self.legal_moves)
             x, y = divmod(model_action, 19)
@@ -166,7 +167,6 @@ class GomokuEnv(Env):
         sys.stdout.write("Player 2 played at position" + str((x, y)) + "\n")
         
     def step(self, action):
-        
         self.step_count += 1
         if self.step_count % 256 == 1 and self.eval_mode == False: #reload the model every 256 steps which should be right after the evaluation
             self.step_count = self.step_count % 256
@@ -181,7 +181,6 @@ class GomokuEnv(Env):
         self.last_eight_moves[0] = np.append(self.last_eight_moves[0][1:], [[x, y]], axis=0)
         self.board.play((x, y))# record the move of current player
         sys.stdout.write("Player 1 played at position" + str((x, y)) + "\n")
-        
         self.n_step += 1
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
@@ -190,23 +189,22 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
-                
+            self.total_scores[0 if self.color == BLACK else 1] += 1
+            self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
+        
         elif self.n_step >= 19*19 - 1:
             reward = 0
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
-                
+            self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
         
         # opponent's turn
         self.opponent_move(WHITE if self.color == BLACK else BLACK)
-        
         self.n_step += 1
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         
@@ -215,22 +213,20 @@ class GomokuEnv(Env):
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
-                
+            self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
+        
         elif self.n_step >= 19*19 - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
                 time.sleep(self.wait_time*10)
-                
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
-                            
+            self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
         
         sys.stdout.flush()
-        
         return self.observation, 0, False, False, info
     
     def reset(self, seed=None, options=None):
@@ -258,9 +254,15 @@ class GomokuEnv(Env):
                     self.random_move = True
         else:
             self.load_opponent_model()
-            
+        
+        # prevent overfitting by adjusting the starting player based on past performance
+        diff = self.total_scores[0] / (max(1, self.total_episodes[0])) - self.total_scores[1] / (max(1, self.total_episodes[1]))
+        if diff > 0.3:
+            self.random_threshold = self.random_threshold / 2
+        elif diff < -0.3:
+            self.random_threshold = (1.0 + self.random_threshold) / 2 # (1 - x) / 2 + x/2 = (1 + x) / 2
         np.random.seed(seed)
-        if (self.eval_mode and self.second_start_overide) or (np.random.rand() > 0.5 and not self.eval_mode):# opponent plays first
+        if (self.eval_mode and self.second_start_overide) or (np.random.rand() > self.random_threshold and not self.eval_mode):# opponent plays first
             sys.stdout.write("Player 2 plays first\n")
             self.color = WHITE
             self.opponent_move(BLACK)
@@ -269,7 +271,6 @@ class GomokuEnv(Env):
             sys.stdout.write("Player 1 plays first\n")
         
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
-        
         return self.observation, info
     
     def close(self):
