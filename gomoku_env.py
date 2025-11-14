@@ -259,10 +259,20 @@ class GomokuEnv(Env):
         diff = self.total_scores[0] / (max(1, self.total_episodes[0])) - self.total_scores[1] / (max(1, self.total_episodes[1]))
         if diff > 0.3:
             self.random_threshold = self.random_threshold / 2
+            self.total_scores = [0, 0]
+            self.total_episodes = [0, 0]
         elif diff < -0.3:
             self.random_threshold = (1.0 + self.random_threshold) / 2 # (1 - x) / 2 + x/2 = (1 + x) / 2
+            self.total_scores = [0, 0]
+            self.total_episodes = [0, 0]
+        elif abs(diff) < 0.05:
+            self.random_threshold = 0.5
+            self.total_scores = [0, 0]
+            self.total_episodes = [0, 0]
         np.random.seed(seed)
-        if (self.eval_mode and self.second_start_overide) or (np.random.rand() > self.random_threshold and not self.eval_mode):# opponent plays first
+        rand = np.random.rand()
+        sys.stdout.write("Current random threshold: " + str(self.random_threshold) + "\n" + "Generated random number: " + str(rand) + "\n")
+        if (self.eval_mode and self.second_start_overide) or (rand > self.random_threshold and not self.eval_mode):# opponent plays first
             sys.stdout.write("Player 2 plays first\n")
             self.color = WHITE
             self.opponent_move(BLACK)
