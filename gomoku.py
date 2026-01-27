@@ -4,33 +4,45 @@ import sys
 import numpy as np
 import pygame
 import random
+import local_constants as c
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
 WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
+BOARD_SIZE = c.BOARD_SIZE
+WINDOW_SIZE = 800 #better be a multiple of BOARD_SIZE
+STANDARD_SPACING = WINDOW_SIZE / BOARD_SIZE
+SIDE_SIZE = STANDARD_SPACING / 2
+
+print("\nBOARD_SIZE:", BOARD_SIZE)
+print("WINDOW_SIZE:", WINDOW_SIZE)
+print("SIDE_SIZE:", SIDE_SIZE)
+print("STANDARD_SPACING:", STANDARD_SPACING)
+print()
+
 lines = []  # a list of all the lines on the board
 
 
 # coordinate of all the horizontal lines
-for i in range(19):
-    lines.append((np.ones(19, dtype=np.int8) * i, np.arange(19, dtype=np.int8)))
+for i in range(BOARD_SIZE):
+    lines.append((np.ones(BOARD_SIZE, dtype=np.int8) * i, np.arange(BOARD_SIZE, dtype=np.int8)))
 
 # vertical
-for i in range(19):
-    lines.append((np.arange(19, dtype=np.int8), np.ones(19, dtype=np.int8) * i))
+for i in range(BOARD_SIZE):
+    lines.append((np.arange(BOARD_SIZE, dtype=np.int8), np.ones(BOARD_SIZE, dtype=np.int8) * i))
 
 # top left to bottom right
-for i in range(4, 19):
-    lines.append((np.arange(i + 1, dtype=np.int8), np.arange(i + 1, dtype=np.int8) + 18 - i))
-for i in range(4, 18):
-    lines.append((np.arange(i + 1, dtype=np.int8) + 18 - i, np.arange(i + 1, dtype=np.int8)))
+for i in range(4, BOARD_SIZE):
+    lines.append((np.arange(i + 1, dtype=np.int8), np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i))
+for i in range(4, BOARD_SIZE - 1):
+    lines.append((np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i, np.arange(i + 1, dtype=np.int8)))
 
 # the other diagonal
-for i in range(4, 19):
-    lines.append((-np.arange(i + 1, dtype=np.int8) + 18, np.arange(i + 1, dtype=np.int8) + 18 - i))
-for i in range(4, 18):
+for i in range(4, BOARD_SIZE):
+    lines.append((-np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1, np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i))
+for i in range(4, BOARD_SIZE - 1):
     lines.append((-np.arange(i + 1, dtype=np.int8) + i, np.arange(i + 1, dtype=np.int8)))
 
 
@@ -39,7 +51,7 @@ class Board:
         """Creates a Board object, representing a Gomoku chessboard"""
         self.finished = False
         self.player = player
-        self.board = np.zeros((19, 19), dtype=np.int8)
+        self.board = np.zeros((BOARD_SIZE, BOARD_SIZE), dtype=np.int8)
         self.moves_count = 0
         self.played_pos = list()
         self.last_length = [0, 0]
@@ -100,7 +112,7 @@ class Board:
             if dim is None:  # distinguish the 2 diagonals
                 top_left_to_p2_right_is_checked = True
 
-            positions = np.unique(np.clip(np.array(positions, dtype=np.int8), 0, 18), axis=0).tolist()
+            positions = np.unique(np.clip(np.array(positions, dtype=np.int8), 0, BOARD_SIZE - 1), axis=0).tolist()
             occupied = self.has_pos(player, positions).tolist()  # 1d array of boolean values of if the positions on the line is occupied
             # add False at the start and end of "occupied" to ensure that it works properly at the edge of board
             occupied.insert(False, 0)
@@ -130,9 +142,9 @@ class Board:
 def highlight(screen,game_pos, color=RED):
     """highlights a stone"""
 
-    pos_x,pos_y = np.flip(game_pos) * 40 + 5   #find the top-left corner of the square the stone is in, and shift slightly
-    vertices = (pos_x,pos_y),(pos_x+5,pos_y),(pos_x,pos_y+5)
-    pygame.draw.polygon(screen,color,vertices)
+    pos_x, pos_y = np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE * 0.25   #find the top-left corner of the square the stone is in, and shift slightly
+    vertices = (pos_x, pos_y), (pos_x + SIDE_SIZE * 0.25, pos_y), (pos_x, pos_y + SIDE_SIZE * 0.25)
+    pygame.draw.polygon(screen, color, vertices)
 
 
 
@@ -142,7 +154,7 @@ def main():
     pygame.init()
 
     # Set the width and height of the screen [width, height]
-    size = (760, 760)
+    size = (WINDOW_SIZE, WINDOW_SIZE)
     screen = pygame.display.set_mode(size)
 
     pygame.display.set_caption("Gomoku Game")
@@ -150,10 +162,14 @@ def main():
     clock = pygame.time.Clock()
 
     screen.fill(WOOD)  # Draw the background color of the board
-    for x in range(20, 760, 40):  # Draw the vertical lines on the board
-        pygame.draw.line(screen, BLACK, (x, 20), (x, 740))
-    for y in range(20, 760, 40):  # Draw the horizontal lines on the board
-        pygame.draw.line(screen, BLACK, (20, y), (740, y))
+    x = SIDE_SIZE
+    while (x < WINDOW_SIZE):
+        pygame.draw.line(screen, BLACK, (x, SIDE_SIZE), (x, WINDOW_SIZE - SIDE_SIZE))
+        x += STANDARD_SPACING
+    y = SIDE_SIZE
+    while (y < WINDOW_SIZE):
+        pygame.draw.line(screen, BLACK, (SIDE_SIZE, y), (WINDOW_SIZE - SIDE_SIZE, y))
+        y += STANDARD_SPACING
     pygame.display.flip()
     
     # -------- Main Program Loop -----------
@@ -167,12 +183,12 @@ def main():
 
                 if event.button == 1:  # Left click
                     mouse_pos = np.array(pygame.mouse.get_pos())
-                    game_pos = np.flip(mouse_pos // 40)  # translate the mouse position into a position on the board
+                    game_pos = np.clip(np.flip(mouse_pos // STANDARD_SPACING), 0, BOARD_SIZE - 1).astype(int)  # translate the mouse position into a position on the board
                     if board.board[tuple(game_pos)] == 0:  # if this play is valid
                         if board.player == 1:
-                            pygame.draw.circle(screen, BLACK, np.flip(game_pos) * 40 + 20, 15)
+                            pygame.draw.circle(screen, BLACK, np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
                         else:
-                            pygame.draw.circle(screen, WHITE, np.flip(game_pos) * 40 + 20, 15)
+                            pygame.draw.circle(screen, WHITE, np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
                         try:
                             highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous p2 move
                         except IndexError:

@@ -10,32 +10,43 @@ import sys
 import numpy as np
 import pygame
 import time
+import local_constants as c
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
 WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
+BOARD_SIZE = c.BOARD_SIZE
+WINDOW_SIZE = 640 #better be a multiple of BOARD_SIZE
+STANDARD_SPACING = WINDOW_SIZE / BOARD_SIZE
+SIDE_SIZE = STANDARD_SPACING / 2
+
+print("BOARD_SIZE:", BOARD_SIZE)
+print("WINDOW_SIZE:", WINDOW_SIZE)
+print("SIDE_SIZE:", SIDE_SIZE)
+print("STANDARD_SPACING:", STANDARD_SPACING)
+
 lines = []  # a list of all the lines on the board
 
 # coordinate of all the horizontal lines
-for i in range(19):
-    lines.append((np.ones(19, dtype=np.int8) * i, np.arange(19, dtype=np.int8)))
+for i in range(BOARD_SIZE):
+    lines.append((np.ones(BOARD_SIZE, dtype=np.int8) * i, np.arange(BOARD_SIZE, dtype=np.int8)))
 
 # vertical
-for i in range(19):
-    lines.append((np.arange(19, dtype=np.int8), np.ones(19, dtype=np.int8) * i))
+for i in range(BOARD_SIZE):
+    lines.append((np.arange(BOARD_SIZE, dtype=np.int8), np.ones(BOARD_SIZE, dtype=np.int8) * i))
 
 # top left to bottom right
-for i in range(4, 19):
-    lines.append((np.arange(i + 1, dtype=np.int8), np.arange(i + 1, dtype=np.int8) + 18 - i))
-for i in range(4, 18):
-    lines.append((np.arange(i + 1, dtype=np.int8) + 18 - i, np.arange(i + 1, dtype=np.int8)))
+for i in range(4, BOARD_SIZE):
+    lines.append((np.arange(i + 1, dtype=np.int8), np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - i))
+for i in range(4, BOARD_SIZE + 4):
+    lines.append((np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i, np.arange(i + 1, dtype=np.int8)))
 
 # the other diagonal
-for i in range(4, 19):
-    lines.append((-np.arange(i + 1, dtype=np.int8) + 18, np.arange(i + 1, dtype=np.int8) + 18 - i))
-for i in range(4, 18):
+for i in range(4, BOARD_SIZE):
+    lines.append((-np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1, np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i))
+for i in range(4, BOARD_SIZE + 4):
     lines.append((-np.arange(i + 1, dtype=np.int8) + i, np.arange(i + 1, dtype=np.int8)))
 
 
@@ -44,7 +55,7 @@ class Board:
         """Creates a Board object, representing a Gomoku chessboard"""
         self.finished = False
         self.player = player
-        self.board = np.zeros((19, 19), dtype=np.int8)
+        self.board = np.zeros((BOARD_SIZE, BOARD_SIZE), dtype=np.int8)
         self.moves_count = 0
         self.played_pos = list()
         self.last_length = [0, 0]
@@ -100,7 +111,7 @@ class Board:
                 else:
                     pos_in_line[dim] += offset
                     
-                if pos_in_line.max() <= 18 and pos_in_line.min() >= 0:
+                if pos_in_line.max() <= BOARD_SIZE - 1 and pos_in_line.min() >= 0:
                     positions.append(pos_in_line)
 
             if dim is None:  # distinguish the 2 diagonals
@@ -135,23 +146,23 @@ class Board:
 def highlight(screen,game_pos, color=RED):
     """highlights a stone"""
 
-    pos_x,pos_y = np.flip(game_pos) * 40 + 5   #find the top-left corner of the square the stone is in, and shift slightly
-    vertices = (pos_x,pos_y),(pos_x+5,pos_y),(pos_x,pos_y+5)
-    pygame.draw.polygon(screen,color,vertices)
+    pos_x, pos_y = np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE * 0.25   #find the top-left corner of the square the stone is in, and shift slightly
+    vertices = (pos_x, pos_y), (pos_x + SIDE_SIZE * 0.25, pos_y), (pos_x, pos_y + SIDE_SIZE * 0.25)
+    pygame.draw.polygon(screen, color, vertices)
 
 
 
 def main():
     board = Board()
 
-    policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
+    policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*15*15 + 15*15), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
     model =  MaskablePPO.load("./best_ppo_models/best_model", verbose=1, policy_kwargs=policy_kwargs)
     print("model loaded")
     
     pygame.init()
 
-    # Set the width and height of the screen [width, height]
-    size = (760, 760)
+      # Set the width and height of the screen [width, height]
+    size = (WINDOW_SIZE, WINDOW_SIZE)
     screen = pygame.display.set_mode(size)
 
     pygame.display.set_caption("Gomoku Game")
@@ -159,10 +170,14 @@ def main():
     clock = pygame.time.Clock()
 
     screen.fill(WOOD)  # Draw the background color of the board
-    for a in range(20, 760, 40):  # Draw the vertical lines on the board
-        pygame.draw.line(screen, BLACK, (a, 20), (a, 740))
-    for b in range(20, 760, 40):  # Draw the horizontal lines on the board
-        pygame.draw.line(screen, BLACK, (20, b), (740, b))
+    x = SIDE_SIZE
+    while (x < WINDOW_SIZE):
+        pygame.draw.line(screen, BLACK, (x, SIDE_SIZE), (x, WINDOW_SIZE - SIDE_SIZE))
+        x += STANDARD_SPACING
+    y = SIDE_SIZE
+    while (y < WINDOW_SIZE):
+        pygame.draw.line(screen, BLACK, (SIDE_SIZE, y), (WINDOW_SIZE - SIDE_SIZE, y))
+        y += STANDARD_SPACING
     pygame.display.flip()
     
     last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)
@@ -179,9 +194,9 @@ def main():
 
                 if event.button == 1:  # Left click
                     mouse_pos = np.array(pygame.mouse.get_pos())
-                    game_pos = np.flip(mouse_pos // 40)  # translate the mouse position into a position on the board
+                    game_pos = np.clip(np.flip(mouse_pos // STANDARD_SPACING), 0, BOARD_SIZE - 1).astype(int)
                     if board.board[tuple(game_pos)] == 0:  # if this play is valid
-                        pygame.draw.circle(screen, BLACK, np.flip(game_pos) * 40 + 20, 15)
+                        pygame.draw.circle(screen, BLACK, np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
                         try:
                             highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous p2 move
                         except IndexError:
@@ -205,7 +220,7 @@ def main():
         
             for user in last_eight_moves[::-1]:# add last 8 moves
                 for move in user:
-                    layer = np.zeros((19, 19), dtype=np.uint8)
+                    layer = np.zeros((c.BOARD_SIZE, c.BOARD_SIZE), dtype=np.uint8)
                     if move[0] != 255 or move[1] != 255:
                         layer[move[0], move[1]] = 1
                     layers.append(layer)
@@ -214,8 +229,8 @@ def main():
             mask = (board.board.flatten() == 0).astype(np.int8)
 
             model_action, _states = model.predict(obs, deterministic=True, action_masks=mask)
-            x, y = divmod(model_action, 19)
-            pygame.draw.circle(screen, WHITE, np.flip((x, y)) * 40 + 20, 15)
+            x, y = divmod(model_action, c.BOARD_SIZE)
+            pygame.draw.circle(screen, WHITE, np.flip((x, y)) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
             try:
                 highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous p2 move
             except IndexError:

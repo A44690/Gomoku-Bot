@@ -6,6 +6,7 @@ from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 import gymnasium.spaces as spaces
+import local_constants as c
 
 class residual_block(nn.Module):
     '''from https://doi.org/10.48550/arXiv.1512.03385. not the basic resnet block in the paper, but the one used in AlphaGo Zero'''
@@ -26,25 +27,25 @@ class residual_block(nn.Module):
 class CustomExtractor(BaseFeaturesExtractor):
     '''Custom extractor for Gomoku environment. Some copied from stable_baselines3, but parameters of the conv layers are changed.'''
     
-    def __init__(self, observation_space: gym.Space, features_dim: int = 2*19*19 + 19*19, normalized_image: bool = False,) -> None:
+    def __init__(self, observation_space: gym.Space, features_dim: int = 2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE, normalized_image: bool = False,) -> None:
         super().__init__(observation_space, features_dim)
         n_input_channels = observation_space.shape[0]
         # print("Input channels:", n_input_channels)
         self.stem = nn.Sequential(
-            nn.Conv2d(n_input_channels, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
+            nn.Conv2d(n_input_channels, c.BLOCK_WIDTH, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(c.BLOCK_WIDTH),
             nn.ReLU(),
         )
 
-        self.Res_blocks = nn.Sequential(*[residual_block(256, 256, 256, dropout_prob=0.1) for i in range(20)])
+        self.Res_blocks = nn.Sequential(*[residual_block(c.BLOCK_WIDTH, c.BLOCK_WIDTH, c.BLOCK_WIDTH, dropout_prob=0.1) for i in range(c.RESIDUAL_BLOCKS)])
         self.to_val_features = nn.Sequential(
-            nn.Conv2d(256, 2, kernel_size=1, stride=1),
+            nn.Conv2d(c.BLOCK_WIDTH, 2, kernel_size=1, stride=1),
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten()
         )
         self.to_policy_features = nn.Sequential(
-            nn.Conv2d(256, 1, kernel_size=1, stride=1),
+            nn.Conv2d(c.BLOCK_WIDTH, 1, kernel_size=1, stride=1),
             nn.BatchNorm2d(1),
             nn.ReLU(),
             nn.Flatten()
@@ -82,10 +83,10 @@ class CustomNetwork(nn.Module):
     def __init__(
         self,
         feature_dim: int,
-        last_layer_dim_pi: int = 19*19,
+        last_layer_dim_pi: int = c.BOARD_SIZE * c.BOARD_SIZE,
         last_layer_dim_vf: int = 1,
-        policy_features_dim = 2*19*19,
-        value_features_dim = 19*19
+        policy_features_dim = 2 * c.BOARD_SIZE * c.BOARD_SIZE,
+        value_features_dim = c.BOARD_SIZE * c.BOARD_SIZE
     ):
         super().__init__()
 
@@ -100,14 +101,14 @@ class CustomNetwork(nn.Module):
         
         # Policy network
         self.policy_net = nn.Sequential(
-            nn.Linear(2*19*19, 19*19),
+            nn.Linear(2 * c.BOARD_SIZE * c.BOARD_SIZE, c.BOARD_SIZE * c.BOARD_SIZE),
         )
         # Value network
         self.value_net = nn.Sequential(
-            nn.Linear(19*19, 256),
+            nn.Linear(c.BOARD_SIZE * c.BOARD_SIZE, c.BLOCK_WIDTH),
             nn.ReLU(),
             nn.Dropout(p=0.2),
-            nn.Linear(256, 1),
+            nn.Linear(c.BLOCK_WIDTH, 1),
             nn.Tanh(),
         )
         

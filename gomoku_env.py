@@ -5,6 +5,7 @@ import pygame
 import torch as th
 import os
 import gymnasium.spaces as spaces
+import local_constants as c
 from gomoku import Board, highlight
 from gymnasium import Env
 from sb3_contrib import MaskablePPO
@@ -17,23 +18,28 @@ BLACK = (0, 0, 0)
 WHITE = (0xff, 0xff, 0xff)
 RED = (0xff, 0, 0)
 
+BOARD_SIZE = c.BOARD_SIZE
+WINDOW_SIZE = 800 #better be a multiple of BOARD_SIZE
+STANDARD_SPACING = WINDOW_SIZE / BOARD_SIZE
+SIDE_SIZE = STANDARD_SPACING / 2
+
 class GomokuEnv(Env):
     def __init__(
         self, 
         render = False, 
-        wait_time = 1.0, 
+        wait_time = 0.2, 
         eval_mode = False, 
-        old_models_folder_path = "ppo_models/", 
-        best_models_folder_path = "best_ppo_models/", 
+        old_models_folder_path = c.SESSION_MODEL_PATH, 
+        best_models_folder_path = c.EVAL_MODEL_PATH, 
         best_model_opponent_percentage = 0.7, 
         old_model_opponent_percentage = 0.05
         ):
         
-        self.action_space = spaces.Discrete(19*19)
+        self.action_space = spaces.Discrete(c.BOARD_SIZE * c.BOARD_SIZE)
         self.observation_space = spaces.Box(
             low=0, 
             high=1, 
-            shape=(10, 19, 19), 
+            shape=(10, c.BOARD_SIZE, c.BOARD_SIZE), 
             dtype=np.uint8
             )
         self.board = Board()
@@ -48,7 +54,7 @@ class GomokuEnv(Env):
         self.step_count = 0
         self.policy_kwargs = dict(
             features_extractor_class=CustomExtractor, 
-            features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), 
+            features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), 
             optimizer_class=optim.AdamW, 
             optimizer_kwargs=dict(weight_decay=1e-5)
             )
@@ -72,44 +78,50 @@ class GomokuEnv(Env):
             # display
             pygame.init()
             # Set the width and height of the screen [width, height]
-            self.size = (760, 760)
+            self.size = (WINDOW_SIZE, WINDOW_SIZE)
             self.screen = pygame.display.set_mode(self.size)
             pygame.display.set_caption("Gomoku Game")
             # Used to manage how fast the screen updates
             self.clock = pygame.time.Clock()
             self.screen.fill(WOOD)  # Draw the background color of the board
-            for x in range(20, 760, 40):  # Draw the vertical lines on the board
-                pygame.draw.line(self.screen, BLACK, (x, 20), (x, 740))
-            for y in range(20, 760, 40):  # Draw the horizontal lines on the board
-                pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
+            x = SIDE_SIZE
+            while (x < WINDOW_SIZE):
+                pygame.draw.line(self.screen, BLACK, (x, SIDE_SIZE), (x, WINDOW_SIZE - SIDE_SIZE))
+                x += STANDARD_SPACING
+            y = SIDE_SIZE
+            while (y < WINDOW_SIZE):
+                pygame.draw.line(self.screen, BLACK, (SIDE_SIZE, y), (WINDOW_SIZE - SIDE_SIZE, y))
+                y += STANDARD_SPACING
             pygame.display.flip()
     
     def load_opponent_model(self):
         #select random opponent model from the models folder, to avoid overfitting
-        self.random_move = False
+        sys.stdout.write("\n")
         random_number = np.random.rand()
         if random_number < self.best_model_opponent_percentage: #play with best model
-            if self.last_model_index == -1: #avoid playing with the same model twice in a row
+            if self.last_model_index == -1: #avoid unnecessary reloads
                 return
             sys.stdout.write("Opponent will play with the best model\n")
             self.last_model_index = -1
             try:
-                self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                self.model = MaskablePPO.load(self.best_models_folder_path + "/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                self.random_move = False
             except:
-                sys.stdout.write("Error, opponent will play randomly\n")
+                sys.stdout.write("      Error, opponent will play randomly\n")
                 self.random_move = True
                 
-        elif random_number - self.best_model_opponent_percentage < self.old_model_opponent_percentage: #play with an old model
+        elif random_number - self.best_model_opponent_percentage < self.old_model_opponent_percentage: #play with an old model or random model
             random_number = int((random_number - self.best_model_opponent_percentage) / (self.old_model_opponent_percentage) * (len(self.old_models_list) + 1))
-            if random_number == self.last_model_index: #avoid playing with the same model twice in a row
+            if random_number == self.last_model_index: #avoid unnecessary reloads
                 return
             if random_number < len(self.old_models_list): #play with an older model
                 model_path = self.old_models_list[random_number]
                 sys.stdout.write("Selected opponent model: " + model_path + "\n")
                 try:
                     self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+                    self.random_move = False
                 except:
-                    sys.stdout.write("Error, opponent will play randomly\n")
+                    sys.stdout.write("      Error, opponent will play randomly\n")
                     self.random_move = True
             else: #play randomly
                 sys.stdout.write("Opponent will play randomly\n")
@@ -118,16 +130,17 @@ class GomokuEnv(Env):
                 
         else: #use older best model
             random_number = int((random_number - self.best_model_opponent_percentage - self.old_model_opponent_percentage) / (1 - self.best_model_opponent_percentage - self.old_model_opponent_percentage) * 10)
-            if random_number == self.last_model_index: #avoid playing with the same model twice in a row
+            if random_number == self.last_model_index: #avoid unnecessary reloads
                 return
             model_path = self.best_models_folder_path + "best_model_" + str(random_number)
             sys.stdout.write("Selected opponent model: " + model_path + "\n")
             try:
                 self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+                self.random_move = False
             except:
                 self.loop_prevent += 1
                 if self.loop_prevent > 5:
-                    sys.stdout.write("Error, opponent will play randomly\n")
+                    sys.stdout.write("      Error, opponent will play randomly\n")
                     self.random_move = True
                 else:
                     self.load_opponent_model()
@@ -135,11 +148,12 @@ class GomokuEnv(Env):
                 self.loop_prevent = 0
             else:
                 self.last_model_index = -2 - random_number
+        sys.stdout.write("\n")
         return
 
     def draw(self, x, y, color):
         pygame.event.pump()
-        pygame.draw.circle(self.screen, color, np.flip((x, y)) * 40 + 20, 15)
+        pygame.draw.circle(self.screen, color, np.flip((x, y)) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
         try:
             highlight(self.screen, self.board.played_pos[-1], WOOD) # remove the highlighting of the previous player's move
         except IndexError:
@@ -157,7 +171,7 @@ class GomokuEnv(Env):
             x, y = legal_positions[random]
         else:
             model_action, _states = self.model.predict(self.opponent_observation, deterministic=False, action_masks=self.legal_moves)
-            x, y = divmod(model_action, 19)
+            x, y = divmod(model_action, c.BOARD_SIZE)
         
         if self.render:
             self.draw(x, y, color)
@@ -170,12 +184,12 @@ class GomokuEnv(Env):
         self.step_count += 1
         if self.step_count % 256 == 1 and self.eval_mode == False: #reload the model every 256 steps which should be right after the evaluation
             self.step_count = self.step_count % 256
-            sys.stdout.write("Reloading the opponent model...\n")
+            sys.stdout.write("\nReloading the opponent model...\n")
             self.load_opponent_model()
-            sys.stdout.write("Opponent model reloaded\n")
+            sys.stdout.write("Opponent model reloaded\n\n")
             
         # player's turn
-        x, y = divmod(action, 19)
+        x, y = divmod(action,c.BOARD_SIZE)
         if self.render:
             self.draw(x, y, self.color)
         self.last_eight_moves[0] = np.append(self.last_eight_moves[0][1:], [[x, y]], axis=0)
@@ -188,17 +202,17 @@ class GomokuEnv(Env):
             reward = 1
             sys.stdout.write("Game over, the winner is 1 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
-                time.sleep(self.wait_time*10)
+                time.sleep(self.wait_time * 10)
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
             self.total_scores[0 if self.color == BLACK else 1] += 1
             self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
         
-        elif self.n_step >= 19*19 - 1:
+        elif self.n_step >= c.BOARD_SIZE * c.BOARD_SIZE - 1:
             reward = 0
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
-                time.sleep(self.wait_time*10)
+                time.sleep(self.wait_time * 10)
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
             self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
@@ -212,16 +226,16 @@ class GomokuEnv(Env):
             reward = -1
             sys.stdout.write("Game over, the winner is 2 in " + str(self.n_step) + " steps" + "\n")
             if self.render:
-                time.sleep(self.wait_time*10)
+                time.sleep(self.wait_time * 10)
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
             self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
         
-        elif self.n_step >= 19*19 - 1:
+        elif self.n_step >= c.BOARD_SIZE * c.BOARD_SIZE - 1:
             reward = -5
             sys.stdout.write("Game over, draw in " + str(self.n_step) + " steps" + "\n")
             if self.render:
-                time.sleep(self.wait_time*10)
+                time.sleep(self.wait_time * 10)
             self.second_start_overide = not self.second_start_overide# switch the starting player in eval mode
             self.total_episodes[0 if self.color == BLACK else 1] += 1
             return self.observation, reward, True, False, info
@@ -233,10 +247,14 @@ class GomokuEnv(Env):
         if self.render:
             pygame.event.pump()
             self.screen.fill(WOOD)  # Draw the background color of the board
-            for x in range(20, 760, 40):  # Draw the vertical lines on the board
-                pygame.draw.line(self.screen, BLACK, (x, 20), (x, 740))
-            for y in range(20, 760, 40):  # Draw the horizontal lines on the board
-                pygame.draw.line(self.screen, BLACK, (20, y), (740, y))
+            x = SIDE_SIZE
+            while (x < WINDOW_SIZE):
+                pygame.draw.line(self.screen, BLACK, (x, SIDE_SIZE), (x, WINDOW_SIZE - SIDE_SIZE))
+                x += STANDARD_SPACING
+            y = SIDE_SIZE
+            while (y < WINDOW_SIZE):
+                pygame.draw.line(self.screen, BLACK, (SIDE_SIZE, y), (WINDOW_SIZE - SIDE_SIZE, y))
+                y += STANDARD_SPACING
             pygame.display.flip()
         
         self.board = Board()
@@ -248,7 +266,7 @@ class GomokuEnv(Env):
             sys.stdout.write("Evaluation mode\n")
             if self.second_start_overide: 
                 try:    
-                    self.model = MaskablePPO.load("best_ppo_models/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                    self.model = MaskablePPO.load(self.best_models_folder_path + "/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
                 except:
                     sys.stdout.write("Model not found, opponent will play randomly\n")
                     self.random_move = True
@@ -271,14 +289,14 @@ class GomokuEnv(Env):
             self.total_episodes = [0, 0]
         np.random.seed(seed)
         rand = np.random.rand()
-        sys.stdout.write("Current random threshold: " + str(self.random_threshold) + "\n" + "Generated random number: " + str(rand) + "\n")
+        sys.stdout.write("Current random threshold: " + str(self.random_threshold) + "\nGenerated random number: " + str(rand) + "\n")
         if (self.eval_mode and self.second_start_overide) or (rand > self.random_threshold and not self.eval_mode):# opponent plays first
-            sys.stdout.write("Player 2 plays first\n")
+            sys.stdout.write("Player 2 plays first\n\n")
             self.color = WHITE
             self.opponent_move(BLACK)
             self.n_step += 1
         else:
-            sys.stdout.write("Player 1 plays first\n")
+            sys.stdout.write("Player 1 plays first\n\n")
         
         info = {"n_steps": self.n_step, "action_mask": self.legal_moves}
         return self.observation, info
@@ -297,7 +315,7 @@ class GomokuEnv(Env):
         
         for user in self.last_eight_moves:# add last 8 moves
             for move in user:
-                layer = np.zeros((19, 19), dtype=np.uint8)
+                layer = np.zeros((c.BOARD_SIZE, c.BOARD_SIZE), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
                     layer[move[0], move[1]] = 1
                 layers.append(layer)
@@ -314,7 +332,7 @@ class GomokuEnv(Env):
         
         for user in self.last_eight_moves[::-1]:# add last 8 moves
             for move in user:
-                layer = np.zeros((19, 19), dtype=np.uint8)
+                layer = np.zeros((c.BOARD_SIZE, c.BOARD_SIZE), dtype=np.uint8)
                 if move[0] != 255 or move[1] != 255:
                     layer[move[0], move[1]] = 1
                 layers.append(layer)

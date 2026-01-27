@@ -2,12 +2,12 @@
 
 A reinforcement learning environment to train Gomoku AI
 
+Additional unsupervised training start up method is (WIP).
+
 Based on Stable-Baselines3's maskablePPO, custom features extractor & custom actor-critic policy
 
-A human training mode will be added soon and a update about MCTS is planned.
-
-## Required Packages
-Pygame, Numpy, Stable-Baselines3, Sb3-contrib, Gymnasium, and Pytorch required
+## Requirements
+Pygame, Numpy, Stable-Baselines3, Sb3-contrib, Gymnasium, and Pytorch are required.
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install
 
@@ -20,11 +20,34 @@ pip install gymnasium
 pip install torch
 ```
 
-If you want TensorBoard, add
+if you want TensorBoard, add
 
 ```bash
 pip install tensorflow
 ```
+
+At last, in the folder that you are running this program, create four folders:
+
+-best_ppo_models
+
+-callback_logs
+
+-ppo_models
+
+-tensorboard
+
+or change the paths according to your preferences in "local_constants.py" under #PATHS AND LOGGING.
+
+## Get Started
+Do all of those after checking the Requirements!
+
+-In "local_constants.py", set the board size you what to train your bot on by changing the BOARD_SIZE variable
+
+-Adjust #NN TRAINING CONSTANTS and #RENDERING OPTIONS according to your preferences
+
+-Run "main.py" and follow the messages in the terminal.
+
+Leave questions in Github if you encountered any trouble(s).
 
 ## Contributers & Credits
 @A44690: Liuxuanhao Alex Zhao (traing environment, main, custom policy, and model testing code)

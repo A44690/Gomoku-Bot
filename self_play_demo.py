@@ -10,6 +10,7 @@ import sys
 import numpy as np
 import pygame
 import time
+import local_constants as c
 
 #ai vs ai
 
@@ -17,8 +18,8 @@ def mask_fn(env):
     return env.legal_moves
 env = GomokuEnv(render=True, wait_time = 1.0)
 env = ActionMasker(env, mask_fn)
-policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2*19*19 + 19*19), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=1e-5))
-model1 = MaskablePPO.load("best_ppo_models/best_model", env=env, verbose=1, policy_kwargs=policy_kwargs)
+policy_kwargs = dict(features_extractor_class=CustomExtractor, features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), optimizer_class=optim.AdamW, optimizer_kwargs=dict(weight_decay=c.WEIGHT_DECAY))
+model1 = MaskablePPO.load(c.EVAL_MODEL_PATH + "best_model", env=env, verbose=1, policy_kwargs=policy_kwargs)
 done = False
 for i in range(0, 7):
     sys.stdout.write("\033[F" + "\033[K")
