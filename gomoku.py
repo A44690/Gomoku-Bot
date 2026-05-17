@@ -54,8 +54,6 @@ class Board:
         self.board = np.zeros((BOARD_SIZE, BOARD_SIZE), dtype=np.int8)
         self.moves_count = 0
         self.played_pos = list()
-        self.last_length = [0, 0]
-        self.contiunous_num = np.zeros((2, 3), dtype=np.uint8)
 
     def play(self, pos):
         """Play on the given position"""
@@ -120,18 +118,6 @@ class Board:
 
             occupied = np.array(occupied, dtype=np.bool)
             dist = np.diff(np.where(occupied == False))  # the distance between the positions not occupied by p1
-            
-            self.last_length[0 if player == 1 else 1] = dist.max() - 1
-            
-            if dist.max() == 3:  # if the p1 occupied exactly 2 in a row
-                self.contiunous_num[0 if player == 1 else 1, 0] += 1
-            
-            if dist.max() == 4:  # if the p1 occupied exactly 3 in a row
-                self.contiunous_num[0 if player == 1 else 1, 1] += 1
-                
-            if dist.max() == 5:  # if the p1 occupied exactly 4 in a row
-                self.contiunous_num[0 if player == 1 else 1, 2] += 1
-            
             if dist.max() > 5:  # if the p1 occupied 5 or more in a row
                 self.player = player * -1
                 self.board[played_pos] = original_stone
