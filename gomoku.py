@@ -22,29 +22,6 @@ print("SIDE_SIZE:", SIDE_SIZE)
 print("STANDARD_SPACING:", STANDARD_SPACING)
 print()
 
-lines = []  # a list of all the lines on the board
-
-
-# coordinate of all the horizontal lines
-for i in range(BOARD_SIZE):
-    lines.append((np.ones(BOARD_SIZE, dtype=np.int8) * i, np.arange(BOARD_SIZE, dtype=np.int8)))
-
-# vertical
-for i in range(BOARD_SIZE):
-    lines.append((np.arange(BOARD_SIZE, dtype=np.int8), np.ones(BOARD_SIZE, dtype=np.int8) * i))
-
-# top left to bottom right
-for i in range(4, BOARD_SIZE):
-    lines.append((np.arange(i + 1, dtype=np.int8), np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i))
-for i in range(4, BOARD_SIZE - 1):
-    lines.append((np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i, np.arange(i + 1, dtype=np.int8)))
-
-# the other diagonal
-for i in range(4, BOARD_SIZE):
-    lines.append((-np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1, np.arange(i + 1, dtype=np.int8) + BOARD_SIZE - 1 - i))
-for i in range(4, BOARD_SIZE - 1):
-    lines.append((-np.arange(i + 1, dtype=np.int8) + i, np.arange(i + 1, dtype=np.int8)))
-
 
 class Board:
     def __init__(self, player=1):
@@ -71,8 +48,8 @@ class Board:
     def is_finished(self, played_pos):
         """Check if the game is finished, returns 1 if the p2 wins, -1 if p1, and 0 if game is not finished"""
         if self.is_won(played_pos):
-            return self.board[tuple(played_pos)]
-        return 0
+            return True
+        return False
 
     def has_pos(self, player, positions):
         """Returns an array of 1 dimension, size of the length positions, of if the positions are occupied by the p1"""
@@ -86,44 +63,35 @@ class Board:
 
     def is_won(self, played_pos, player=None):
         """Returns true if the game is won by the given move (can be played or not yet played), else returns None"""
-        # checks for vertical, horizontal, top-left-to-bottom-right, and the other diagonal lines, for dim = 0, 1, None, None respectively (with special logic for the last case)
+        # revision by Liuxuanhao Alex Zhao, more direct than the previous version, worst case 4*9 iterations, O(1) time complexity, the last version is too complex with many bugs
         if player is None:
             player = self.player
-        played_pos = tuple(played_pos)
-        original_stone = self.board[played_pos]
-        self.board[played_pos] = player
-        top_left_to_p2_right_is_checked = False
-        for dim in (0, 1, None, None):
-            positions = list()  # a list of positions in a line, will later check if there are 5 consecutive positions in the list are of the same color
-            for offset in range(-5, 6):
-                pos_in_line = np.array(played_pos, dtype=np.int8)
-
-                if top_left_to_p2_right_is_checked:
-                    # goes from top right to bottom left
-                    pos_in_line[0] -= offset
-                    pos_in_line[1] += offset
-                else:
-                    pos_in_line[dim] += offset
-
-                positions.append(pos_in_line)
-
-            if dim is None:  # distinguish the 2 diagonals
-                top_left_to_p2_right_is_checked = True
-
-            positions = np.unique(np.clip(np.array(positions, dtype=np.int8), 0, BOARD_SIZE - 1), axis=0).tolist()
-            occupied = self.has_pos(player, positions).tolist()  # 1d array of boolean values of if the positions on the line is occupied
-            # add False at the start and end of "occupied" to ensure that it works properly at the edge of board
-            occupied.insert(False, 0)
-            occupied.append(False)
-
-            occupied = np.array(occupied, dtype=np.bool)
-            dist = np.diff(np.where(occupied == False))  # the distance between the positions not occupied by p1
-            if dist.max() > 5:  # if the p1 occupied 5 or more in a row
-                self.player = player * -1
-                self.board[played_pos] = original_stone
-                return True
+        played_pos = tuple(played_pos) # find the previously played position
+        directions = [(1, 0), 
+                      (0, 1), 
+                      (1, 1), 
+                      (1, -1)] # horizontal, vertical, diagonal down, diagonal up
+        
+        for direction in directions:
+            count = 0
+            for offset in range(-4, 5):
+                x_position = played_pos[0] + offset * direction[0]
+                y_position = played_pos[1] + offset * direction[1]
                 
-        self.board[played_pos] = original_stone
+                if (x_position < 0 or 
+                    x_position >= BOARD_SIZE or 
+                    y_position < 0 or 
+                    y_position >= BOARD_SIZE): # out of bounds check
+                    count = 0
+                    continue
+                
+                if self.board[x_position, y_position] == player: # if occupied by the player
+                    count += 1
+                    if count >= 5: # counter for 5 in a row
+                        return True
+                else:
+                    count = 0
+        return False
 
 def highlight(screen,game_pos, color=RED):
     """highlights a stone"""
@@ -176,13 +144,13 @@ def main():
                         else:
                             pygame.draw.circle(screen, WHITE, np.flip(game_pos) * STANDARD_SPACING + SIDE_SIZE, STANDARD_SPACING * 0.375)
                         try:
-                            highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous p2 move
+                            highlight(screen, board.played_pos[-1], WOOD) # remove the highlighting of the previous move
                         except IndexError:
                             pass
                         highlight(screen, game_pos)
                         pygame.display.flip()
                         board.play(game_pos)
-    print("Game over! The winner is player", "2 (White)" if board.player == 1 else "1 (Black)")
+    print("Game over! The winner is player", "2 (White)" if board.player == -1 else "1 (Black)")
     # Close the window and quit.
     time.sleep(1)
     pygame.quit()
