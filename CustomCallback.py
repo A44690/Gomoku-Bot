@@ -14,19 +14,19 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
     '''Alternate eval callback on rollout start, credits to SB3 devs'''
     def __init__(self, *args, **kwargs):
         super(CustomMaskableEvalCallback, self).__init__(*args, **kwargs)
-        self.every_two_rollouts = True  # evaluate at the start of each rollout
+        self.rollout_count = 0  # evaluate at the start of every # rollout
         self.last_model = None
         self.count_since_last_save = 0
     
     def _on_step(self) -> bool:
         if self.n_calls % self.eval_freq == 0:
             if not self.last_model == None:
-                self.count_since_last_save = (self.count_since_last_save + 1) % 10
+                self.count_since_last_save = (self.count_since_last_save + 1) % c.MAX_SAVED_BEST_MODELS  # save last 10 best models, to prevent overfitting
                 self.model.save(os.path.join(self.best_model_save_path, "best_model_" + str(self.count_since_last_save)))
         return True  # only evaluate at the start of the rollout
     
     def _on_rollout_start(self) -> None:
-        if self.every_two_rollouts:
+        if self.rollout_count % c.ROLLOUTS_PER_EVAL == 0:
             # Reset success rate buffer
             self._is_success_buffer = []
 
@@ -93,4 +93,4 @@ class CustomMaskableEvalCallback(MaskableEvalCallback):
                     self.last_model = self.model
                 self.best_mean_reward = float(mean_reward)
                 
-        self.every_two_rollouts = not self.every_two_rollouts
+        self.rollout_count += 1

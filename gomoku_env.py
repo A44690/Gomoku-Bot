@@ -33,18 +33,27 @@ class GomokuEnv(Env):
         best_models_folder_path = c.EVAL_MODEL_PATH, 
         best_model_opponent_percentage = 0.7, 
         old_model_opponent_percentage = 0.05
-        ):
+    ):
         
-        self.action_space = spaces.Discrete(c.BOARD_SIZE * c.BOARD_SIZE)
         self.observation_space = spaces.Box(
             low=0, 
             high=1, 
             shape=(10, c.BOARD_SIZE, c.BOARD_SIZE), 
             dtype=np.uint8
-            )
+        )
+        
+        self.policy_kwargs = dict(
+            features_extractor_class=CustomExtractor, 
+            features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), 
+            optimizer_class=optim.AdamW, 
+            optimizer_kwargs=dict(weight_decay=1e-5)
+        )
+        
+        self.action_space = spaces.Discrete(c.BOARD_SIZE * c.BOARD_SIZE)
+        self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
+        
         self.board = Board()
         self.n_step = 0
-        self.last_eight_moves = np.full((2, 4, 2), 255, dtype=np.uint8)# record last 4 moves of both players, initialized to invalid positions
         self.render = render
         self.wait_time = wait_time
         self.random_move = False
@@ -52,12 +61,7 @@ class GomokuEnv(Env):
         self.eval_mode = eval_mode
         self.second_start_overide = True
         self.step_count = 0
-        self.policy_kwargs = dict(
-            features_extractor_class=CustomExtractor, 
-            features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), 
-            optimizer_class=optim.AdamW, 
-            optimizer_kwargs=dict(weight_decay=1e-5)
-            )
+        
         self.old_models_list = []
         self.best_models_folder_path = best_models_folder_path
         self.best_model_opponent_percentage = best_model_opponent_percentage
@@ -129,7 +133,7 @@ class GomokuEnv(Env):
             self.last_model_index = random_number
                 
         else: #use older best model
-            random_number = int((random_number - self.best_model_opponent_percentage - self.old_model_opponent_percentage) / (1 - self.best_model_opponent_percentage - self.old_model_opponent_percentage) * 10)
+            random_number = int((random_number - self.best_model_opponent_percentage - self.old_model_opponent_percentage) / (1 - self.best_model_opponent_percentage - self.old_model_opponent_percentage) * c.MAX_SAVED_BEST_MODELS)
             if random_number == self.last_model_index: #avoid unnecessary reloads
                 return
             model_path = self.best_models_folder_path + "best_model_" + str(random_number)

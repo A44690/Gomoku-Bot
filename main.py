@@ -26,22 +26,64 @@ policy_kwargs = dict(
     )
 
 train_env = make_vec_env(make_env, n_envs=1)
-env_eval = ActionMasker(GomokuEnv(render=c.RENDER_MODE_EVAL, eval_mode=True, wait_time=c.RENDER_MODE_WAIT_TIME), mask_fn) 
+env_eval = ActionMasker(
+    GomokuEnv(
+        render=c.RENDER_MODE_EVAL, 
+        eval_mode=True, 
+        wait_time=c.RENDER_MODE_WAIT_TIME
+    ), 
+    mask_fn
+) 
 
 if (input("pretrain? (y/n)") == "y"):
     model_name = input("model name: ")
-    model = MaskablePPO.load(c.SESSION_MODEL_PATH + model_name, env=train_env, verbose=1, n_steps=c.N_STEPS, learning_rate=c.LEARNING_RATE, policy_kwargs=policy_kwargs, tensorboard_log=c.TENSORBOARD_LOG_PATH)
+    model = MaskablePPO.load(
+        c.SESSION_MODEL_PATH + model_name, 
+        env=train_env, verbose=1, 
+        kwargs=policy_kwargs,
+    )
+    model.n_steps = c.N_STEPS
+    model.batch_size = c.BATCH_SIZE
+    model.n_epochs = c.N_EPOCHS
+    model.learning_rate = c.LEARNING_RATE
+    model.clip_range = c.CLIP_RANGE
+    model.gamma = c.GAMMA
+    model._setup_model()  # to update the optimizer with the new parameters
     print("model loaded")
 else:
-    model = MaskablePPO(CustomActorCriticPolicy, env=train_env, verbose=1, n_steps=c.N_STEPS, learning_rate=c.LEARNING_RATE, policy_kwargs=policy_kwargs, tensorboard_log=c.TENSORBOARD_LOG_PATH)
+    model = MaskablePPO(
+        CustomActorCriticPolicy, 
+        env=train_env, 
+        verbose=1, 
+        n_steps=c.N_STEPS, 
+        learning_rate=c.LEARNING_RATE, 
+        n_epochs=c.N_EPOCHS,
+        policy_kwargs=policy_kwargs, 
+        tensorboard_log=c.TENSORBOARD_LOG_PATH
+    )
     print("model created")
 
-eval_callback = CustomMaskableEvalCallback(eval_env=env_eval, best_model_save_path=c.EVAL_MODEL_PATH, log_path=c.LOG_PATH, eval_freq=1024, deterministic=False, n_eval_episodes=2)
+eval_callback = CustomMaskableEvalCallback(
+    eval_env=env_eval, 
+    best_model_save_path=c.EVAL_MODEL_PATH, 
+    log_path=c.LOG_PATH, 
+    eval_freq=c.N_STEPS, 
+    deterministic=False, 
+    n_eval_episodes=c.EVAL_EPISODES, 
+    render=c.RENDER_MODE_EVAL
+)
 
 while True:
     time_step = int(input("Enter time step: "))
     print("training for", time_step, "time steps")
-    model = model.learn(total_timesteps=time_step, progress_bar=True, log_interval=1, tb_log_name=c.LOG_PATH, reset_num_timesteps=False, callback=eval_callback)
+    model = model.learn(
+        total_timesteps=time_step, 
+        progress_bar=True, 
+        log_interval=1, 
+        tb_log_name=c.LOG_PATH, 
+        reset_num_timesteps=False, 
+        callback=eval_callback
+    )
     model.save(c.SESSION_MODEL_PATH + "ppo_model_" + str(model.num_timesteps))
     print("model saved")
     if (input("continue? (y/n)") == "n"):
