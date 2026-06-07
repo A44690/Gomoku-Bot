@@ -5,13 +5,13 @@ import pygame
 import torch as th
 import os
 import gymnasium.spaces as spaces
+import torch
 import local_constants as c
 from gomoku import Board, highlight
 from gymnasium import Env
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
-from torch import optim
 
 WOOD = (0xd4, 0xb8, 0x96)
 BLACK = (0, 0, 0)
@@ -31,8 +31,7 @@ class GomokuEnv(Env):
         eval_mode = False, 
         old_models_folder_path = c.SESSION_MODEL_PATH, 
         best_models_folder_path = c.EVAL_MODEL_PATH, 
-        best_model_opponent_percentage = 0.7, 
-        old_model_opponent_percentage = 0.05
+        best_model_opponent_percentage = 0.7
     ):
         
         self.observation_space = spaces.Box(
@@ -44,9 +43,9 @@ class GomokuEnv(Env):
         
         self.policy_kwargs = dict(
             features_extractor_class=CustomExtractor, 
-            features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), 
-            optimizer_class=optim.AdamW, 
-            optimizer_kwargs=dict(weight_decay=1e-5)
+            features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE), 
+            optimizer_class=torch.optim.AdamW, 
+            optimizer_kwargs=dict(weight_decay=c.WEIGHT_DECAY)
         )
         
         self.action_space = spaces.Discrete(c.BOARD_SIZE * c.BOARD_SIZE)
@@ -65,17 +64,11 @@ class GomokuEnv(Env):
         self.old_models_list = []
         self.best_models_folder_path = best_models_folder_path
         self.best_model_opponent_percentage = best_model_opponent_percentage
-        self.old_model_opponent_percentage = old_model_opponent_percentage
         self.last_model_index = -2
         self.loop_prevent = 0
         self.total_scores = [0, 0] # [player1 stats, player2 stats]
         self.total_episodes = [0, 0]
         self.random_threshold = 0.5
-        
-        for file in os.listdir(old_models_folder_path):
-            if file.endswith(".zip"):
-                self.old_models_list.append(old_models_folder_path + file)
-        
         self.load_opponent_model()
         
         if render:
@@ -108,38 +101,37 @@ class GomokuEnv(Env):
             sys.stdout.write("Opponent will play with the best model\n")
             self.last_model_index = -1
             try:
-                self.model = MaskablePPO.load(self.best_models_folder_path + "/best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                self.model = MaskablePPO.load(self.best_models_folder_path + "best_model", verbose=1, policy_kwargs=self.policy_kwargs)
+                self.model.n_steps = c.N_STEPS
+                self.model.batch_size = c.BATCH_SIZE
+                self.model.n_epochs = c.N_EPOCHS
+                self.model.learning_rate = c.LEARNING_RATE
+                self.model.clip_range = c.CLIP_RANGE
+                self.model.gamma = c.GAMMA
+                self.model._setup_model()  # to update the optimizer with the new parameters
                 self.random_move = False
             except:
                 sys.stdout.write("      Error, opponent will play randomly\n")
                 self.random_move = True
-                
-        elif random_number - self.best_model_opponent_percentage < self.old_model_opponent_percentage: #play with an old model or random model
-            random_number = int((random_number - self.best_model_opponent_percentage) / (self.old_model_opponent_percentage) * (len(self.old_models_list) + 1))
-            if random_number == self.last_model_index: #avoid unnecessary reloads
-                return
-            if random_number < len(self.old_models_list): #play with an older model
-                model_path = self.old_models_list[random_number]
-                sys.stdout.write("Selected opponent model: " + model_path + "\n")
-                try:
-                    self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
-                    self.random_move = False
-                except:
-                    sys.stdout.write("      Error, opponent will play randomly\n")
-                    self.random_move = True
-            else: #play randomly
-                sys.stdout.write("Opponent will play randomly\n")
-                self.random_move = True
-            self.last_model_index = random_number
-                
         else: #use older best model
-            random_number = int((random_number - self.best_model_opponent_percentage - self.old_model_opponent_percentage) / (1 - self.best_model_opponent_percentage - self.old_model_opponent_percentage) * c.MAX_SAVED_BEST_MODELS)
+            random_number = int((random_number - self.best_model_opponent_percentage) / (1 - self.best_model_opponent_percentage) * c.MAX_SAVED_BEST_MODELS)
             if random_number == self.last_model_index: #avoid unnecessary reloads
                 return
             model_path = self.best_models_folder_path + "best_model_" + str(random_number)
             sys.stdout.write("Selected opponent model: " + model_path + "\n")
             try:
-                self.model = MaskablePPO.load(model_path, verbose=1, policy_kwargs=self.policy_kwargs)
+                self.model = MaskablePPO.load(
+                    model_path, 
+                    verbose=1,
+                    policy_kwargs=self.policy_kwargs
+                )
+                self.model.n_steps = c.N_STEPS
+                self.model.batch_size = c.BATCH_SIZE
+                self.model.n_epochs = c.N_EPOCHS
+                self.model.learning_rate = c.LEARNING_RATE
+                self.model.clip_range = c.CLIP_RANGE
+                self.model.gamma = c.GAMMA
+                self.model._setup_model()  # to update the optimizer with the new parameters
                 self.random_move = False
             except:
                 self.loop_prevent += 1
@@ -174,7 +166,7 @@ class GomokuEnv(Env):
             random = np.random.choice(len(legal_positions))
             x, y = legal_positions[random]
         else:
-            model_action, _states = self.model.predict(self.opponent_observation, deterministic=False, action_masks=self.legal_moves)
+            model_action, _states = self.model.predict(self.opponent_observation, deterministic=True, action_masks=self.legal_moves)
             x, y = divmod(model_action, c.BOARD_SIZE)
         
         if self.render:

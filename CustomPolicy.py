@@ -27,7 +27,7 @@ class residual_block(nn.Module):
 class CustomExtractor(BaseFeaturesExtractor):
     '''Custom extractor for Gomoku environment. Some copied from stable_baselines3, but parameters of the conv layers are changed.'''
     
-    def __init__(self, observation_space: gym.Space, features_dim: int = 2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE, normalized_image: bool = False,) -> None:
+    def __init__(self, observation_space: gym.Space, features_dim: int = 2 * c.BOARD_SIZE * c.BOARD_SIZE, normalized_image: bool = False,) -> None:
         super().__init__(observation_space, features_dim)
         n_input_channels = observation_space.shape[0]
         # print("Input channels:", n_input_channels)
@@ -38,15 +38,9 @@ class CustomExtractor(BaseFeaturesExtractor):
         )
 
         self.Res_blocks = nn.Sequential(*[residual_block(c.BLOCK_WIDTH, c.BLOCK_WIDTH, c.BLOCK_WIDTH, dropout_prob=0.1) for i in range(c.RESIDUAL_BLOCKS)])
-        self.to_val_features = nn.Sequential(
+        self.to_features = nn.Sequential(
             nn.Conv2d(c.BLOCK_WIDTH, 2, kernel_size=1, stride=1),
             nn.BatchNorm2d(2),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        self.to_policy_features = nn.Sequential(
-            nn.Conv2d(c.BLOCK_WIDTH, 1, kernel_size=1, stride=1),
-            nn.BatchNorm2d(1),
             nn.ReLU(),
             nn.Flatten()
         )
@@ -55,19 +49,17 @@ class CustomExtractor(BaseFeaturesExtractor):
             sample_input = th.as_tensor(observation_space.sample()[None]).float()
             x = self.stem(sample_input)
             x = self.Res_blocks(x)
-            x_val = self.to_val_features(x)
-            x_pol = self.to_policy_features(x)
+            x = self.to_features(x)
             # print("Value feature extractor output dimension:", x_val.shape)
             # print("Policy feature extractor output dimension:", x_pol.shape)
-            self._features_dim = x_val.shape[1] + x_pol.shape[1]
+            self._features_dim = x.shape[1]
             # print("Feature extractor output dimension:", self._features_dim)
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         x = self.stem(observations)
         x = self.Res_blocks(x)
-        val_features = self.to_val_features(x)
-        policy_features = self.to_policy_features(x)
-        return th.cat((val_features, policy_features), dim=1)
+        features = self.to_features(x)
+        return features
 
 class CustomNetwork(nn.Module):
     '''You guessed it, from satable_baselines3's documentation...'''
@@ -105,7 +97,7 @@ class CustomNetwork(nn.Module):
         )
         # Value network
         self.value_net = nn.Sequential(
-            nn.Linear(c.BOARD_SIZE * c.BOARD_SIZE, c.BLOCK_WIDTH),
+            nn.Linear(2 * c.BOARD_SIZE * c.BOARD_SIZE, c.BLOCK_WIDTH),
             nn.ReLU(),
             nn.Dropout(p=0.2),
             nn.Linear(c.BLOCK_WIDTH, 1),
@@ -116,13 +108,9 @@ class CustomNetwork(nn.Module):
         return self.forward_actor(features), self.forward_critic(features)
     
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        features = features[:, :self.policy_features_dim]
-        # print("features shape in forward_actor:", features.shape)
         return self.policy_net(features)
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        features = features[:, self.value_features_dim:]
-        # print("features shape in forward_critic:", features.shape)
         return self.value_net(features)
     
 class CustomActorCriticPolicy(MaskableActorCriticPolicy):

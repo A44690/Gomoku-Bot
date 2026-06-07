@@ -5,14 +5,13 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from gomoku_env import GomokuEnv
 from CustomPolicy import CustomExtractor, CustomActorCriticPolicy
-from torch import optim
 from CustomCallback import CustomMaskableEvalCallback
 import sys
 import local_constants as c
+import torch
 
 def mask_fn(env):
     return env.legal_moves
-
 def make_env():
     env = GomokuEnv(render=c.RENDER_MODE_TRAIN, wait_time=c.RENDER_MODE_WAIT_TIME)
     env = ActionMasker(env, mask_fn)
@@ -20,10 +19,10 @@ def make_env():
 
 policy_kwargs = dict(
     features_extractor_class=CustomExtractor, 
-    features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE + c.BOARD_SIZE * c.BOARD_SIZE), 
-    optimizer_class=optim.AdamW, 
+    features_extractor_kwargs=dict(features_dim=2 * c.BOARD_SIZE * c.BOARD_SIZE), 
+    optimizer_class=torch.optim.AdamW, 
     optimizer_kwargs=dict(weight_decay=c.WEIGHT_DECAY)
-    )
+)
 
 train_env = make_vec_env(make_env, n_envs=1)
 env_eval = ActionMasker(
@@ -48,7 +47,6 @@ if (input("pretrain? (y/n)") == "y"):
     model.learning_rate = c.LEARNING_RATE
     model.clip_range = c.CLIP_RANGE
     model.gamma = c.GAMMA
-    model._setup_model()  # to update the optimizer with the new parameters
     print("model loaded")
 else:
     model = MaskablePPO(
@@ -63,12 +61,16 @@ else:
     )
     print("model created")
 
+model.policy = torch.compile(model.policy)
+model.policy.to("cuda" if torch.cuda.is_available() else "cpu")
+model._setup_model()  # to update the optimizer with the new parameters
+
 eval_callback = CustomMaskableEvalCallback(
     eval_env=env_eval, 
     best_model_save_path=c.EVAL_MODEL_PATH, 
     log_path=c.LOG_PATH, 
     eval_freq=c.N_STEPS, 
-    deterministic=False, 
+    deterministic=True, 
     n_eval_episodes=c.EVAL_EPISODES, 
     render=c.RENDER_MODE_EVAL
 )
